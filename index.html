@@ -3,113 +3,59 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#10131b">
+<meta name="theme-color" content="#0d1119">
 <title>3D Printer Online — Prototype</title>
 <style>
-:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f6f7fb;background:#0d1017}*{box-sizing:border-box}html,body,#app{margin:0;width:100%;height:100%;overflow:hidden}body{background:radial-gradient(circle at 50% 20%,#242b3b 0,#10131b 52%,#090b10 100%)}button{font:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}#scene{position:fixed;inset:0;z-index:0}.hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:max(18px,env(safe-area-inset-top)) 18px max(20px,env(safe-area-inset-bottom))}.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.brand{font-weight:900;letter-spacing:.06em;font-size:clamp(14px,2.4vw,18px);text-transform:uppercase;opacity:.9}.cash{pointer-events:auto;padding:10px 14px;border-radius:16px;background:rgba(12,15,22,.72);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);font-size:20px;font-weight:900}.bottom{display:grid;gap:10px;width:min(520px,100%);margin:0 auto}.card{position:relative;z-index:20;pointer-events:auto;background:rgba(12,15,22,.82);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:14px;box-shadow:0 14px 40px rgba(0,0,0,.28)}.model-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}.model-name{font-weight:900;font-size:18px}.model-sub{opacity:.62;font-size:13px;margin-top:2px}.value{font-weight:900;font-size:18px}.value small{display:block;font-size:9px;opacity:.5;text-align:right;letter-spacing:.08em}.progress{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:12px}.progress>div{height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#67e8f9,#60a5fa,#a78bfa);transition:width .08s linear}.actions{display:grid;grid-template-columns:1fr auto;gap:10px}.primary,.upgrade{position:relative;z-index:30;border:0;border-radius:18px;min-height:58px;cursor:pointer;color:white;font-weight:950;letter-spacing:.02em}.primary{background:linear-gradient(135deg,#2563eb,#7c3aed);font-size:18px;box-shadow:0 10px 28px rgba(37,99,235,.28)}.primary:active{transform:scale(.98)}.primary:disabled{cursor:default;opacity:.5}.upgrade{min-width:130px;padding:0 14px;background:linear-gradient(135deg,#182033,#253149);font-size:13px}.upgrade:disabled{opacity:.45}.upgrade.ready{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{transform:translateY(-2px)}}.status{position:fixed;z-index:15;top:76px;left:50%;transform:translateX(-50%);pointer-events:none;text-align:center;font-weight:900;text-shadow:0 2px 12px rgba(0,0,0,.5)}.status .big{font-size:clamp(24px,6vw,42px)}.status .small{opacity:.7;font-size:12px;letter-spacing:.12em;text-transform:uppercase}.toast{position:fixed;z-index:40;left:50%;bottom:190px;transform:translate(-50%,20px);opacity:0;pointer-events:none;background:rgba(10,12,18,.9);border:1px solid rgba(255,255,255,.12);padding:10px 14px;border-radius:999px;font-weight:800;transition:.25s}.toast.show{opacity:1;transform:translate(-50%,0)}@media(max-width:560px){.hud{padding-left:12px;padding-right:12px}.actions{grid-template-columns:1fr}.upgrade{min-height:48px}.toast{bottom:230px}}
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f6f7fb;background:#0a0d13}*{box-sizing:border-box}html,body,#app{margin:0;width:100%;height:100%;overflow:hidden}body{background:radial-gradient(circle at 50% 18%,#273147 0,#111722 48%,#080a0f 100%)}button{font:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}#scene{position:fixed;inset:0;z-index:0}.hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:max(16px,env(safe-area-inset-top)) 16px max(18px,env(safe-area-inset-bottom))}.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.brand{font-weight:900;letter-spacing:.055em;font-size:clamp(13px,2.4vw,18px);text-transform:uppercase;opacity:.9}.cash{pointer-events:auto;padding:10px 14px;border-radius:16px;background:rgba(10,14,21,.78);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.11);font-size:20px;font-weight:900;box-shadow:0 10px 30px rgba(0,0,0,.25)}.bottom{display:grid;gap:10px;width:min(530px,100%);margin:0 auto}.card{pointer-events:auto;background:rgba(10,14,21,.82);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.11);border-radius:24px;padding:14px;box-shadow:0 16px 46px rgba(0,0,0,.34)}.model-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}.model-name{font-weight:900;font-size:18px}.model-sub{opacity:.6;font-size:12px;margin-top:3px}.value{font-weight:950;font-size:19px}.value small{display:block;font-size:9px;opacity:.5;text-align:right;letter-spacing:.1em}.progress{height:9px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:12px;box-shadow:inset 0 1px 3px rgba(0,0,0,.3)}.progress>div{height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#61e5ff,#638cff,#b274ff);box-shadow:0 0 15px rgba(97,229,255,.55);transition:width .05s linear}.actions{display:grid;grid-template-columns:1fr auto;gap:10px}.primary,.upgrade{border:0;border-radius:18px;min-height:58px;cursor:pointer;color:white;font-weight:950;letter-spacing:.02em}.primary{background:linear-gradient(135deg,#2468ff,#7b39ea);font-size:18px;box-shadow:0 10px 30px rgba(50,91,255,.32),inset 0 1px 0 rgba(255,255,255,.2)}.primary:active{transform:scale(.985)}.primary:disabled{cursor:default;opacity:.52}.upgrade{min-width:132px;padding:0 14px;background:linear-gradient(135deg,#182235,#273652);font-size:13px;border:1px solid rgba(255,255,255,.07)}.upgrade:disabled{opacity:.42}.upgrade.ready{animation:pulse 1.1s ease-in-out infinite}@keyframes pulse{50%{transform:translateY(-2px);box-shadow:0 10px 26px rgba(78,133,255,.2)}}.status{position:fixed;z-index:15;top:72px;left:50%;transform:translateX(-50%);pointer-events:none;text-align:center;font-weight:900;text-shadow:0 3px 16px rgba(0,0,0,.65);white-space:nowrap}.status .big{font-size:clamp(25px,6vw,44px);line-height:1}.status .small{opacity:.72;font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px}.toast{position:fixed;z-index:40;left:50%;bottom:190px;transform:translate(-50%,18px);opacity:0;pointer-events:none;background:rgba(9,12,18,.92);border:1px solid rgba(255,255,255,.12);padding:10px 15px;border-radius:999px;font-weight:850;transition:.22s}.toast.show{opacity:1;transform:translate(-50%,0)}.flash{position:fixed;z-index:5;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 45%,rgba(255,230,145,.2),transparent 38%);opacity:0;transition:opacity .18s}.flash.on{opacity:1}@media(max-width:560px){.hud{padding-left:12px;padding-right:12px}.actions{grid-template-columns:1fr}.upgrade{min-height:48px}.toast{bottom:230px}.status{top:66px}}
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="scene"></div>
-  <div class="hud">
-    <div class="topbar"><div class="brand">3D Printer Online <span style="opacity:.45">Prototype 0.2</span></div><div class="cash" id="cash">$0</div></div>
-    <div class="bottom"><div class="card">
-      <div class="model-row"><div><div class="model-name">Rubber Duck</div><div class="model-sub">PLA • first model</div></div><div class="value"><small>SELL VALUE</small>$25</div></div>
-      <div class="progress"><div id="progressBar"></div></div>
-      <div class="actions"><button type="button" class="primary" id="mainButton">PRINT</button><button type="button" class="upgrade" id="upgradeButton">SPEED LV.1<br><span style="opacity:.62">$20</span></button></div>
-    </div></div>
-  </div>
-  <div class="status"><div class="small" id="statusSmall">LOADING PRINTER</div><div class="big" id="statusBig"></div></div>
-  <div class="toast" id="toast"></div>
+ <div id="scene"></div><div class="flash" id="flash"></div>
+ <div class="hud"><div class="topbar"><div class="brand">3D Printer Online <span style="opacity:.42">Prototype 0.3</span></div><div class="cash" id="cash">$0</div></div>
+ <div class="bottom"><div class="card"><div class="model-row"><div><div class="model-name">Rubber Duck</div><div class="model-sub">PLA • STARTER PRINT</div></div><div class="value"><small>SELL VALUE</small>$25</div></div><div class="progress"><div id="progressBar"></div></div><div class="actions"><button type="button" class="primary" id="mainButton">PRINT</button><button type="button" class="upgrade" id="upgradeButton">SPEED LV.1<br><span style="opacity:.62">$20</span></button></div></div></div></div>
+ <div class="status"><div class="small" id="statusSmall">LOADING PRINTER</div><div class="big" id="statusBig"></div></div><div class="toast" id="toast"></div>
 </div>
-
-<script>
-(function(){
-  const mainButton=document.getElementById('mainButton');
-  const upgradeButton=document.getElementById('upgradeButton');
-  const cashEl=document.getElementById('cash');
-  const progressBar=document.getElementById('progressBar');
-  const statusSmall=document.getElementById('statusSmall');
-  const statusBig=document.getElementById('statusBig');
-  const toast=document.getElementById('toast');
-
-  let app=null;
-  let pendingPrint=false;
-
-  function showToast(text){toast.textContent=text;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),1300)}
-
-  mainButton.addEventListener('click',function(){
-    if(!app){pendingPrint=true;statusSmall.textContent='STARTING PRINTER…';statusBig.textContent='';return;}
-    app.onMain();
-  });
-  mainButton.addEventListener('touchend',function(e){e.preventDefault();mainButton.click()},{passive:false});
-  upgradeButton.addEventListener('click',function(){if(app)app.buy();});
-
-  window.__printerUI={mainButton,upgradeButton,cashEl,progressBar,statusSmall,statusBig,showToast,setApp(v){app=v;if(pendingPrint){pendingPrint=false;setTimeout(()=>app.onMain(),0)}}};
-})();
-</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function(){
-  const ui=window.__printerUI;
-  if(typeof THREE==='undefined'){
-    ui.statusSmall.textContent='3D ENGINE FAILED TO LOAD';
-    ui.statusBig.textContent='Reload page';
-    ui.mainButton.textContent='RETRY';
-    ui.setApp({onMain:function(){location.reload()},buy:function(){}});
-    return;
-  }
-
-  try{
-    const scene=new THREE.Scene();
-    scene.fog=new THREE.Fog(0x111621,8.5,18);
-    const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,.1,50);
-    camera.position.set(5.2,4.2,7.2);camera.lookAt(0,1.2,0);
-    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
-    renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<700?1.5:2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.localClippingEnabled=true;
-    document.getElementById('scene').appendChild(renderer.domElement);
-
-    scene.add(new THREE.HemisphereLight(0xaec8ff,0x15110c,1.6));
-    const key=new THREE.DirectionalLight(0xffffff,2.7);key.position.set(4,7,5);key.castShadow=true;scene.add(key);
-    const rim=new THREE.PointLight(0x7c9cff,30,10,2);rim.position.set(-3,3,-2);scene.add(rim);
-    const floor=new THREE.Mesh(new THREE.CircleGeometry(8,64),new THREE.MeshStandardMaterial({color:0x161b25,roughness:.88}));floor.rotation.x=-Math.PI/2;floor.position.y=-.03;floor.receiveShadow=true;scene.add(floor);
-
-    const printer=new THREE.Group();scene.add(printer);
-    const dark=new THREE.MeshStandardMaterial({color:0x1e2632,roughness:.48,metalness:.45}),dark2=new THREE.MeshStandardMaterial({color:0x0e131b,roughness:.35,metalness:.65}),accent=new THREE.MeshStandardMaterial({color:0x485d83,roughness:.28,metalness:.68}),railMat=new THREE.MeshStandardMaterial({color:0x9ca8b8,metalness:.85,roughness:.22});
-    function box(w,h,d,mat,x,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;printer.add(m);return m}
-    box(4.3,.35,3.7,dark,0,.18,0);box(3.25,.10,2.65,new THREE.MeshStandardMaterial({color:0x202934,metalness:.4,roughness:.32}),0,.42,0);box(.24,3.4,.24,dark2,-1.82,2,-1.42);box(.24,3.4,.24,dark2,1.82,2,-1.42);box(3.85,.26,.30,dark2,0,3.6,-1.42);box(3.55,.14,.14,railMat,0,2.5,-.35);
-
-    const gantry=new THREE.Group();printer.add(gantry);const head=new THREE.Mesh(new THREE.BoxGeometry(.62,.54,.62),accent);head.castShadow=true;gantry.add(head);const nozzle=new THREE.Mesh(new THREE.ConeGeometry(.09,.30,18),new THREE.MeshStandardMaterial({color:0xe9a75f,metalness:.8,roughness:.18}));nozzle.rotation.x=Math.PI;nozzle.position.y=-.40;head.add(nozzle);const glow=new THREE.PointLight(0xffb454,0,1.8,2);glow.position.y=-.48;head.add(glow);
-
-    const spool=new THREE.Group();spool.position.set(1.9,3.15,-1.45);spool.rotation.z=Math.PI/2;printer.add(spool);spool.add(new THREE.Mesh(new THREE.CylinderGeometry(.20,.20,.72,28),dark2));const filament=new THREE.Mesh(new THREE.CylinderGeometry(.52,.52,.42,42),new THREE.MeshStandardMaterial({color:0xf6b73c,roughness:.45}));spool.add(filament);const sr1=new THREE.Mesh(new THREE.CylinderGeometry(.62,.62,.07,42),dark2);sr1.position.y=.26;spool.add(sr1);const sr2=sr1.clone();sr2.position.y=-.26;spool.add(sr2);
-
-    const duckBaseY=.47,duckHeight=1.75;
-    const duck=new THREE.Group();duck.position.set(0,duckBaseY,.05);scene.add(duck);
-    const clipPlane=new THREE.Plane(new THREE.Vector3(0,-1,0),duckBaseY);
-    const duckMat=new THREE.MeshStandardMaterial({color:0xf4c43a,roughness:.34,clippingPlanes:[clipPlane]}),orange=new THREE.MeshStandardMaterial({color:0xf27f2f,roughness:.38,clippingPlanes:[clipPlane]}),eyeMat=new THREE.MeshStandardMaterial({color:0x101318,roughness:.4,clippingPlanes:[clipPlane]});
-    function dm(g,m,x,y,z,sx=1,sy=1,sz=1){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);o.castShadow=true;duck.add(o);return o}
-    dm(new THREE.SphereGeometry(.76,32,20),duckMat,0,.58,0,1.2,.86,1);dm(new THREE.SphereGeometry(.48,32,20),duckMat,.42,1.25,-.03);dm(new THREE.SphereGeometry(.52,26,18),duckMat,-.65,.67,.05,.85,.46,.7);dm(new THREE.ConeGeometry(.19,.48,4),orange,.87,1.22,.08,1,.6,1).rotation.z=-Math.PI/2;dm(new THREE.SphereGeometry(.055,16,10),eyeMat,.67,1.39,.40);dm(new THREE.SphereGeometry(.055,16,10),eyeMat,.67,1.39,-.43);
-    const fresh=new THREE.Mesh(new THREE.TorusGeometry(.62,.025,8,48),new THREE.MeshBasicMaterial({color:0xffe082,transparent:true,opacity:.8}));fresh.rotation.x=Math.PI/2;fresh.visible=false;scene.add(fresh);
-
-    let state='idle',cash=0,speedLevel=0,printStart=0,printDuration=4000,finishedOnce=false;
-    try{const s=JSON.parse(localStorage.getItem('printer-prototype')||'null');if(s){cash=Number(s.cash)||0;speedLevel=Number(s.speedLevel)||0;printDuration=4000*Math.pow(.82,speedLevel)}}catch(e){}
-    function save(){try{localStorage.setItem('printer-prototype',JSON.stringify({cash,speedLevel}))}catch(e){}}
-    function updateUI(){ui.cashEl.textContent='$'+cash;const cost=20+speedLevel*35;ui.upgradeButton.innerHTML='SPEED LV.'+(speedLevel+1)+'<br><span style="opacity:.62">$'+cost+'</span>';ui.upgradeButton.disabled=state==='printing'||cash<cost;ui.upgradeButton.classList.toggle('ready',cash>=cost&&state!=='printing');if(state==='idle'){ui.mainButton.textContent='PRINT';ui.mainButton.disabled=false;ui.statusSmall.textContent=finishedOnce?'READY FOR ANOTHER':'READY TO PRINT';ui.statusBig.textContent=''}else if(state==='printing'){ui.mainButton.textContent='PRINTING…';ui.mainButton.disabled=true;ui.statusSmall.textContent='PRINTING'}else{ui.mainButton.textContent='SELL  +$25';ui.mainButton.disabled=false;ui.statusSmall.textContent='PRINT COMPLETE';ui.statusBig.textContent='Rubber Duck'}}
-    function startPrint(){if(state!=='idle')return;state='printing';printStart=performance.now();clipPlane.constant=duckBaseY;fresh.visible=true;glow.intensity=5;updateUI()}
-    function complete(){state='complete';fresh.visible=false;glow.intensity=0;clipPlane.constant=duckBaseY+duckHeight+.4;updateUI()}
-    function sell(){if(state!=='complete')return;cash+=25;finishedOnce=true;state='idle';save();ui.showToast('+$25  SOLD');updateUI()}
-    function buy(){const cost=20+speedLevel*35;if(cash<cost||state==='printing')return;cash-=cost;speedLevel++;printDuration=4000*Math.pow(.82,speedLevel);save();ui.showToast('PRINT SPEED +18%');updateUI()}
-    function onMain(){if(state==='complete')sell();else startPrint()}
-    updateUI();
-    ui.setApp({onMain,buy});
-
-    let prev=performance.now();
-    function animate(now){requestAnimationFrame(animate);const dt=Math.min(.05,(now-prev)/1000);prev=now;if(state==='printing'){const p=Math.min(1,(now-printStart)/printDuration),e=THREE.MathUtils.smootherstep(p,0,1);clipPlane.constant=duckBaseY+duckHeight*e;ui.progressBar.style.width=Math.round(p*100)+'%';ui.statusBig.textContent=Math.round(p*100)+'%';const y=duckBaseY+duckHeight*e;gantry.position.set(Math.sin(now*.006)*1.12,y+.58,Math.sin(now*.0032)*.42);fresh.position.set(0,y,.05);fresh.scale.setScalar(.72+.16*Math.sin(e*Math.PI));spool.rotation.x+=dt*(2.2+speedLevel*.55);if(p>=1)complete()}else{ui.progressBar.style.width=state==='complete'?'100%':'0%';gantry.position.x+=(0-gantry.position.x)*Math.min(1,dt*4);gantry.position.z+=(-.3-gantry.position.z)*Math.min(1,dt*4);gantry.position.y+=(2.35-gantry.position.y)*Math.min(1,dt*4)}const t=now*.00018;camera.position.x=5.2+Math.sin(t)*.24;camera.lookAt(0,1.25,0);renderer.render(scene,camera)}
-    requestAnimationFrame(animate);
-    addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<700?1.5:2))});
-  }catch(err){console.error(err);ui.statusSmall.textContent='PRINTER ERROR';ui.statusBig.textContent='Reload page';ui.mainButton.textContent='RETRY';ui.mainButton.disabled=false;ui.setApp({onMain:function(){location.reload()},buy:function(){}})}
+const $=s=>document.querySelector(s),ui={cash:$('#cash'),main:$('#mainButton'),upgrade:$('#upgradeButton'),bar:$('#progressBar'),small:$('#statusSmall'),big:$('#statusBig'),toast:$('#toast'),flash:$('#flash')};
+function toast(t){ui.toast.textContent=t;ui.toast.classList.add('show');setTimeout(()=>ui.toast.classList.remove('show'),1150)}
+if(typeof THREE==='undefined'){ui.small.textContent='3D ENGINE FAILED TO LOAD';ui.big.textContent='RELOAD';ui.main.textContent='RETRY';ui.main.onclick=()=>location.reload();return}
+try{
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x101722,8.5,17);
+const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,.1,50);camera.position.set(5.1,3.85,7.1);camera.lookAt(0,1.25,0);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<700?1.45:1.9));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.localClippingEnabled=true;$('#scene').appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xc4d8ff,0x17120d,1.55));const key=new THREE.DirectionalLight(0xffffff,2.5);key.position.set(4,7,5);key.castShadow=true;key.shadow.mapSize.set(1024,1024);scene.add(key);const rim=new THREE.PointLight(0x5e8cff,30,10,2);rim.position.set(-3,3,-2);scene.add(rim);
+const floor=new THREE.Mesh(new THREE.CircleGeometry(8,64),new THREE.MeshStandardMaterial({color:0x151c28,roughness:.9}));floor.rotation.x=-Math.PI/2;floor.position.y=-.03;floor.receiveShadow=true;scene.add(floor);
+const printer=new THREE.Group();scene.add(printer);const dark=new THREE.MeshStandardMaterial({color:0x1d2735,roughness:.48,metalness:.44}),dark2=new THREE.MeshStandardMaterial({color:0x0c121a,roughness:.36,metalness:.66}),accent=new THREE.MeshStandardMaterial({color:0x48658f,roughness:.25,metalness:.7}),rail=new THREE.MeshStandardMaterial({color:0xaab4c1,metalness:.86,roughness:.2});
+function box(w,h,d,mat,x,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;printer.add(m);return m}
+box(4.3,.35,3.7,dark,0,.18,0);const bed=box(3.25,.10,2.65,new THREE.MeshStandardMaterial({color:0x202b38,metalness:.4,roughness:.3}),0,.42,0);box(.24,3.4,.24,dark2,-1.82,2,-1.42);box(.24,3.4,.24,dark2,1.82,2,-1.42);box(3.85,.26,.30,dark2,0,3.6,-1.42);box(3.55,.14,.14,rail,0,2.5,-.35);
+const headGroup=new THREE.Group();printer.add(headGroup);const head=new THREE.Mesh(new THREE.BoxGeometry(.62,.54,.62),accent);head.castShadow=true;headGroup.add(head);const nozzle=new THREE.Mesh(new THREE.ConeGeometry(.09,.30,18),new THREE.MeshStandardMaterial({color:0xf0aa5c,metalness:.82,roughness:.17}));nozzle.rotation.x=Math.PI;nozzle.position.y=-.4;head.add(nozzle);const glow=new THREE.PointLight(0xffac45,0,1.8,2);glow.position.y=-.48;head.add(glow);
+const spool=new THREE.Group();spool.position.set(1.9,3.15,-1.45);spool.rotation.z=Math.PI/2;printer.add(spool);spool.add(new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.72,28),dark2));const filament=new THREE.Mesh(new THREE.CylinderGeometry(.52,.52,.42,42),new THREE.MeshStandardMaterial({color:0xf3b334,roughness:.43}));spool.add(filament);const sr1=new THREE.Mesh(new THREE.CylinderGeometry(.62,.62,.07,42),dark2);sr1.position.y=.26;spool.add(sr1);const sr2=sr1.clone();sr2.position.y=-.26;spool.add(sr2);
+const baseY=.47,height=1.75,duck=new THREE.Group();duck.position.set(0,baseY,.05);scene.add(duck);const clip=new THREE.Plane(new THREE.Vector3(0,-1,0),baseY);const yellow=new THREE.MeshStandardMaterial({color:0xf5c542,roughness:.33,clippingPlanes:[clip]}),orange=new THREE.MeshStandardMaterial({color:0xf47f31,roughness:.36,clippingPlanes:[clip]}),black=new THREE.MeshStandardMaterial({color:0x0c1016,roughness:.42,clippingPlanes:[clip]});
+function part(g,m,x,y,z,sx=1,sy=1,sz=1){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);o.castShadow=true;duck.add(o);return o}
+part(new THREE.SphereGeometry(.76,30,20),yellow,0,.58,0,1.2,.86,1);part(new THREE.SphereGeometry(.48,28,18),yellow,.42,1.25,-.03);part(new THREE.SphereGeometry(.52,24,18),yellow,-.65,.67,.05,.85,.46,.7);part(new THREE.ConeGeometry(.19,.48,4),orange,.87,1.22,.08,1,.6,1).rotation.z=-Math.PI/2;part(new THREE.SphereGeometry(.055,14,10),black,.67,1.39,.40);part(new THREE.SphereGeometry(.055,14,10),black,.67,1.39,-.43);
+const layerMat=new THREE.MeshBasicMaterial({color:0xffe28a,transparent:true,opacity:.92,side:THREE.DoubleSide});const layer=new THREE.Mesh(new THREE.PlaneGeometry(2.15,1.45),layerMat);layer.rotation.x=-Math.PI/2;layer.visible=false;scene.add(layer);
+const particles=[];for(let i=0;i<8;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(.018,6,4),new THREE.MeshBasicMaterial({color:0xffc65f,transparent:true,opacity:0}));scene.add(p);particles.push(p)}
+let state='idle',cash=0,speed=0,start=0,duration=4600,completionAt=0,finished=false;
+try{const s=JSON.parse(localStorage.getItem('printer-prototype')||'null');if(s){cash=+s.cash||0;speed=+s.speedLevel||0;duration=4600*Math.pow(.82,speed)}}catch(e){}
+function save(){try{localStorage.setItem('printer-prototype',JSON.stringify({cash,speedLevel:speed}))}catch(e){}}
+function audio(kind){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const ac=audio.ac||(audio.ac=new A());if(ac.state==='suspended')ac.resume();const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);const t=ac.currentTime;if(kind==='done'){o.frequency.setValueAtTime(620,t);o.frequency.exponentialRampToValueAtTime(930,t+.12);g.gain.setValueAtTime(.05,t);g.gain.exponentialRampToValueAtTime(.001,t+.23)}else{o.frequency.setValueAtTime(105,t);g.gain.setValueAtTime(.018,t);g.gain.exponentialRampToValueAtTime(.001,t+.045)}o.start(t);o.stop(t+(kind==='done'?.24:.05))}catch(e){}}
+function update(){ui.cash.textContent='$'+cash;const cost=20+speed*35;ui.upgrade.innerHTML='SPEED LV.'+(speed+1)+'<br><span style="opacity:.62">$'+cost+'</span>';ui.upgrade.disabled=state==='printing'||state==='finishing'||cash<cost;ui.upgrade.classList.toggle('ready',cash>=cost&&state!=='printing'&&state!=='finishing');if(state==='idle'){ui.main.disabled=false;ui.main.textContent='PRINT';ui.small.textContent=finished?'READY FOR ANOTHER':'READY TO PRINT';ui.big.textContent=''}else if(state==='printing'){ui.main.disabled=true;ui.main.textContent='PRINTING…';ui.small.textContent='PRINTING'}else if(state==='finishing'){ui.main.disabled=true;ui.main.textContent='FINISHING…';ui.small.textContent='FINAL LAYER';ui.big.textContent='100%'}else{ui.main.disabled=false;ui.main.textContent='SELL  +$25';ui.small.textContent='PRINT COMPLETE';ui.big.textContent='Rubber Duck'}}
+function print(){if(state!=='idle')return;audio('move');state='printing';start=performance.now();clip.constant=baseY;layer.visible=true;glow.intensity=5;duck.rotation.y=0;ui.bar.style.width='0%';update()}
+function finish(now){state='finishing';completionAt=now;layer.visible=false;glow.intensity=0;clip.constant=baseY+height+.5;audio('done');ui.flash.classList.add('on');setTimeout(()=>ui.flash.classList.remove('on'),180);update()}
+function sell(){if(state!=='complete')return;cash+=25;finished=true;state='idle';save();toast('+$25  SOLD');update()}
+function buy(){const cost=20+speed*35;if(cash<cost||state==='printing'||state==='finishing')return;cash-=cost;speed++;duration=4600*Math.pow(.82,speed);save();toast('PRINT SPEED +18%');update()}
+ui.main.onclick=()=>state==='complete'?sell():print();ui.upgrade.onclick=buy;update();
+let prev=performance.now(),lastTick=0;
+function animate(now){requestAnimationFrame(animate);const dt=Math.min(.05,(now-prev)/1000);prev=now;
+ if(state==='printing'){const p=Math.min(1,(now-start)/duration),e=THREE.MathUtils.smootherstep(p,0,1),y=baseY+height*e;clip.constant=y;ui.bar.style.width=Math.round(p*100)+'%';ui.big.textContent=Math.round(p*100)+'%';if(p<.08)ui.small.textContent='FIRST LAYER';else if(p>.9)ui.small.textContent='FINAL LAYERS';else ui.small.textContent='PRINTING';const layerIndex=Math.floor(p*42),phase=(p*42-layerIndex);const dir=layerIndex%2===0?1:-1;const x=(-1.08+phase*2.16)*dir;const z=Math.sin(layerIndex*.9)*.38;headGroup.position.set(x,y+.58,z-.05);layer.position.set(0,y+.006,.05);layer.scale.set(.55+.35*Math.sin(Math.PI*Math.min(1,p/.2)),.62+.16*Math.sin(layerIndex*.7),1);layerMat.opacity=.64+.28*Math.sin(phase*Math.PI);spool.rotation.x+=dt*(3+speed*.7);if(now-lastTick>120){audio('move');lastTick=now}for(let i=0;i<particles.length;i++){const q=particles[i],a=(i/particles.length)*Math.PI*2+now*.006;q.position.set(x+Math.cos(a)*.12,y+.12+Math.sin(a*1.7)*.07,z-.05+Math.sin(a)*.12);q.material.opacity=.12+.18*Math.sin(now*.01+i)}if(p>=1)finish(now)}
+ else if(state==='finishing'){const k=Math.min(1,(now-completionAt)/650);headGroup.position.x+=(1.45-headGroup.position.x)*Math.min(1,dt*5);headGroup.position.y+=(2.5-headGroup.position.y)*Math.min(1,dt*5);headGroup.position.z+=(-.25-headGroup.position.z)*Math.min(1,dt*5);duck.rotation.y+=dt*1.4*k;if(k>=1){state='complete';update()}}
+ else{ui.bar.style.width=state==='complete'?'100%':'0%';headGroup.position.x+=(0-headGroup.position.x)*Math.min(1,dt*4);headGroup.position.y+=(2.35-headGroup.position.y)*Math.min(1,dt*4);headGroup.position.z+=(-.3-headGroup.position.z)*Math.min(1,dt*4);if(state==='complete')duck.rotation.y+=dt*.22;for(const q of particles)q.material.opacity*=.9}
+ const targetX=state==='complete'?4.55:5.1,targetY=state==='complete'?3.45:3.85,targetZ=state==='complete'?6.25:7.1;camera.position.x+=(targetX-camera.position.x)*Math.min(1,dt*2.4);camera.position.y+=(targetY-camera.position.y)*Math.min(1,dt*2.4);camera.position.z+=(targetZ-camera.position.z)*Math.min(1,dt*2.4);camera.lookAt(0,state==='complete'?1.2:1.28,0);renderer.render(scene,camera)}requestAnimationFrame(animate);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<700?1.45:1.9))});
+}catch(err){console.error(err);ui.small.textContent='PROTOTYPE ERROR';ui.big.textContent='RELOAD';ui.main.textContent='RETRY';ui.main.disabled=false;ui.main.onclick=()=>location.reload()}
 })();
 </script>
-</body>
-</html>
+</body></html>
