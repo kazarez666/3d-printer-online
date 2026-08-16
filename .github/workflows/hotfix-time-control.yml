@@ -1,0 +1,42 @@
+name: Hotfix time control
+on:
+  push:
+    branches: [main]
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix time control
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          s=s.replace('Prototype 0.7','Prototype 0.8')
+          s=s.replace('id="versionLabel">0.7<','id="versionLabel">0.8<')
+          s=s.replace("const APP_VERSION='0.7';","const APP_VERSION='0.8';")
+          s=s.replace("let selected=MODELS.find(m=>m.id===saveData.selected&&m.unlock(saveData))||MODELS[0],state='idle',printStart=0,completeAt=0,progress=0;", "let selected=MODELS.find(m=>m.id===saveData.selected&&m.unlock(saveData))||MODELS[0],state='idle',printStart=0,printElapsed=0,completeAt=0,progress=0;")
+          s=s.replace("function getDuration(){return selected.time*Math.pow(.82,saveData.speed)/timeScale}", "function getDuration(){return selected.time*Math.pow(.82,saveData.speed)}")
+          s=s.replace("progress=0;state='printing';printStart=performance.now();completeAt=0;", "progress=0;state='printing';printStart=performance.now();printElapsed=0;completeAt=0;")
+          if 'ui.time.onclick' not in s:
+              s=s.replace("ui.main.onclick=()=>state==='complete'?sellCurrent():startPrint();", "ui.time.onclick=()=>{const idx=TIME_SCALES.indexOf(timeScale);timeScale=TIME_SCALES[(idx+1)%TIME_SCALES.length];ui.time.textContent='TIME '+timeScale+'×';toast('TIME '+timeScale+'×')};ui.main.onclick=()=>state==='complete'?sellCurrent():startPrint();")
+          s=s.replace("progress=Math.min(1,(now-printStart)/getDuration());", "printElapsed+=dt*1000*timeScale;progress=Math.min(1,printElapsed/getDuration());")
+          s=s.replace("spool.rotation.x+=dt*(2.5+saveData.speed*.55+(progress<.24?.35:0));", "spool.rotation.x+=dt*timeScale*(2.5+saveData.speed*.55+(progress<.24?.35:0));")
+          p.write_text(s)
+          Path('version.json').write_text('{\n  "version": "0.8"\n}\n')
+          PY
+          node -e "const fs=require('fs');const s=fs.readFileSync('index.html','utf8');const a=s.indexOf('<script>')+8,b=s.indexOf('</script>',a);new Function(s.slice(a,b)); console.log('JS syntax OK')"
+      - name: Commit hotfix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html version.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Prototype 0.8 fix time controls"
+          git push
