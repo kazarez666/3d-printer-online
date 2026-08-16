@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1020">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<title>3D Printer Online — Prototype 1.2</title>
-<link rel="stylesheet" href="style.css?v=1.2">
+<title>3D Printer Online — Prototype 1.3</title>
+<link rel="stylesheet" href="style.css?v=1.3">
 </head>
 <body>
 <div id="app">
@@ -14,7 +14,7 @@
   <div class="flash" id="flash"></div>
   <div class="hud">
     <div class="topbar">
-      <div class="brand">3D Printer Online <span style="opacity:.42">Prototype <span id="versionLabel">1.2</span></span></div>
+      <div class="brand">3D Printer Online <span style="opacity:.42">Prototype <span id="versionLabel">1.3</span></span></div>
       <div class="top-actions">
         <button class="chip" id="packButton">PACK 1/1</button>
         <button class="chip" id="timeButton">TIME 1×</button>
@@ -28,7 +28,7 @@
           <div class="row">
             <div>
               <div class="title" id="familyTitle">Cat Mystery Print</div>
-              <div class="sub" id="familySub">3 common • 1 rare • 1 legendary</div>
+              <div class="sub" id="familySub">British • Siamese • Tabby • Maine Coon • Bengal</div>
             </div>
             <div class="value"><small>POTENTIAL VALUE</small><span id="familyValue">$10–$50</span></div>
           </div>
@@ -41,23 +41,23 @@
         <div class="card printer-box">
           <div>
             <div class="tag" id="currentPrinterTag">CURRENT PRINTER</div>
-            <div class="title" id="printerName" style="margin-top:8px">Starter Mini</div>
-            <div class="sub" id="printerDesc">Tiny open printer for very small figurines.</div>
+            <div class="title" id="printerName" style="margin-top:6px">Starter Mini</div>
+            <div class="sub" id="printerDesc">Compact open printer for miniature figures.</div>
           </div>
-          <div class="printer-line"><span>Build volume</span><strong id="printerBuild">Mini</strong></div>
-          <div class="printer-line"><span>Print speed</span><strong id="printerSpeed">1.0×</strong></div>
-          <div class="printer-line"><span>Current pack</span><strong id="printerValueMult">Tiny</strong></div>
+          <div class="printer-line"><span>Build volume</span><strong id="printerBuild">Tiny</strong></div>
+          <div class="printer-line"><span>Print speed</span><strong id="printerSpeed">1.00×</strong></div>
+          <div class="printer-line"><span>Current pack</span><strong id="printerValueMult">Tiny Collectibles</strong></div>
           <div class="printer-line"><span>Next unlock</span><strong id="printerNextHint">Creator One</strong></div>
-          <button class="side-btn" id="printerButton">NEXT PRINTER<br><span>$1500</span></button>
+          <button class="side-btn" id="printerButton">NEXT PRINTER<br><span>$1,500</span></button>
         </div>
       </div>
     </div>
   </div>
   <div class="status"><div class="small" id="statusSmall">LOADING PRINTER</div><div class="big" id="statusBig"></div></div>
   <div class="toast" id="toast"></div>
-  <div class="hint">Goal: print small collectibles, earn money, buy a better printer.</div>
+  <div class="hint"></div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=1.2"></script>
+<script src="app.js?v=1.3"></script>
 </body>
 </html>
