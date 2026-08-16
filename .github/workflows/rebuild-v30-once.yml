@@ -1,0 +1,55 @@
+name: Rebuild 3.0 once
+on:
+  push:
+    paths:
+      - .github/workflows/rebuild-v30-once.yml
+jobs:
+  rebuild:
+    if: github.event.head_commit.message == 'Rebuild 3.0 once'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace app with clean rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf core.js models.js game.js visual24.js asset25.js assets scripts tools
+          mkdir -p assets
+          cp staging-v3/index.html index.html
+          cp staging-v3/style.css style.css
+          cp staging-v3/app.js app.js
+          cp staging-v3/version.json version.json
+          URL='https://kenney.nl/media/pages/assets/cube-pets/44e58e945f-1774520254/kenney_cube-pets_1.0.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/cube.zip
+          rm -rf /tmp/cube && mkdir -p /tmp/cube
+          unzip -q /tmp/cube.zip -d /tmp/cube
+          CAT=$(find /tmp/cube -type f \( -iname '*cat*.glb' -o -ipath '*cat*/*.glb' \) | head -n 1 || true)
+          if [ -n "$CAT" ]; then
+            cp "$CAT" assets/cat.glb
+          else
+            CAT_GLTF=$(find /tmp/cube -type f \( -iname '*cat*.gltf' -o -ipath '*cat*/*.gltf' \) | head -n 1 || true)
+            if [ -n "$CAT_GLTF" ]; then
+              npx --yes @gltf-transform/cli copy "$CAT_GLTF" assets/cat.glb
+            else
+              echo 'No cat GLB/GLTF found in Kenney Cube Pets archive'
+              find /tmp/cube -maxdepth 5 -type f | sed -n '1,240p'
+              exit 1
+            fi
+          fi
+          test -s assets/cat.glb
+          node --check app.js
+          grep -q 'REBUILD 3.0' index.html
+          grep -q '"3.0"' version.json
+      - name: Commit clean rebuild and self-delete
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf staging-v3
+          rm -f .github/workflows/rebuild-v30-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Rebuild 3.0 clean real-asset prototype'
+          git push
