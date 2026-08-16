@@ -1,0 +1,30 @@
+name: Inspect animal files once
+on:
+  push:
+    paths:
+      - .github/workflows/inspect-animal-files-once.yml
+jobs:
+  inspect:
+    if: github.event.head_commit.message == 'Inspect animal files once'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and list Quaternius animals
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -q gdown
+          mkdir -p /tmp/animals
+          gdown --folder 'https://drive.google.com/drive/folders/1uJ3N5HfB7jKTseJUNQr3N4YaN0UuEtHk?usp=sharing' -O /tmp/animals
+          find /tmp/animals -maxdepth 5 -type f | sort | sed -n '1,320p'
+      - name: Self delete
+        shell: bash
+        run: |
+          rm -f .github/workflows/inspect-animal-files-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'Remove animal file inspection workflow' || true
+          git push
