@@ -1,4 +1,4 @@
-const APP_VERSION='3.2';
+const APP_VERSION='3.2.1';
 (async()=>{try{const d=await fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json());if(d.version&&d.version!==APP_VERSION){const u=new URL(location.href);u.searchParams.set('v',d.version);location.replace(u)}}catch{}})();
 const $=s=>document.querySelector(s);
 const ui={cash:$('#cash'),print:$('#printButton'),bar:$('#progressBar'),eyebrow:$('#statusEyebrow'),title:$('#statusTitle'),toast:$('#toast'),flash:$('#flash'),reset:$('#resetView'),tabs:$('#familyTabs'),name:$('#modelName'),meta:$('#modelMeta'),count:$('#packCount'),picker:$('#variantPicker')};
@@ -6,11 +6,11 @@ const KEY='printer-rebuild-v3';let save={cash:0,prints:0,family:'cats',selected:
 
 const FAMILIES={
  cats:{label:'CATS',single:'CAT',range:'$10–$50',variants:[
-  {id:'british',name:'British Shorthair',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xb7c1cf,target:1.48},
-  {id:'siamese',name:'Siamese Cat',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xead8b8,target:1.48},
-  {id:'tabby',name:'Orange Tabby',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xe6904a,target:1.48},
-  {id:'maine',name:'Maine Coon',rarity:'Rare',value:25,weight:18,type:'gltf',src:'assets/pets/animal-lion.glb',tint:0x8c7868,target:1.55},
-  {id:'bengal',name:'Bengal Leopard Cat',rarity:'Legendary',value:50,weight:7,type:'gltf',src:'assets/pets/animal-tiger.glb',tint:0xe2a04f,target:1.55}
+  {id:'british',name:'British Shorthair',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xb7c1cf,target:1.45,shape:[1.12,.94,1.10]},
+  {id:'siamese',name:'Siamese Cat',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xead8b8,target:1.52,shape:[.86,1.08,.88]},
+  {id:'tabby',name:'Orange Tabby',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xe6904a,target:1.48,shape:[1,1,1]},
+  {id:'maine',name:'Maine Coon',rarity:'Rare',value:25,weight:18,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0x8f8178,target:1.62,shape:[1.18,1.10,1.16],maine:true},
+  {id:'bengal',name:'Bengal Leopard Cat',rarity:'Legendary',value:50,weight:7,type:'gltf',src:'assets/pets/animal-tiger.glb',tint:0xe2a04f,target:1.55,shape:[.94,1.06,.96]}
  ]},
  dinos:{label:'DINOSAURS',single:'DINOSAUR',range:'$12–$80',variants:[
   {id:'para',name:'Parasaurolophus',rarity:'Common',value:12,weight:38,type:'obj',src:'assets/dinos/Parasaurolophus.obj',tint:0x71b873,target:1.38,max:2.35},
@@ -34,7 +34,14 @@ const printer=new THREE.Group();scene.add(printer);const dark=new THREE.MeshStan
 const BED_Y=.52,clip=new THREE.Plane(new THREE.Vector3(0,-1,0),BED_Y),modelRoot=new THREE.Group();scene.add(modelRoot);modelRoot.position.y=BED_Y;let model=null,modelHeight=1.45,state='idle',progress=0,revealAt=0,current=null,elapsed=0,family=save.family;
 const gltfLoader=new THREE.GLTFLoader(),objLoader=new THREE.OBJLoader(),assetCache=new Map();
 function cloneMaterial(mat,tint){const c=mat.clone();c.clippingPlanes=[clip];c.clipShadows=true;if(c.color)c.color.multiply(new THREE.Color(tint));c.roughness=Math.max(.32,Math.min(.72,c.roughness??.5));c.metalness=Math.min(.12,c.metalness??0);c.needsUpdate=true;return c}
-function prepareModel(raw,v){raw.updateMatrixWorld(true);let b0=new THREE.Box3().setFromObject(raw),s0=b0.getSize(new THREE.Vector3());const main=Math.max(.001,s0.y),wide=Math.max(.001,s0.x,s0.z),scale=Math.min(v.target/main,(v.max||2.25)/wide);raw.scale.multiplyScalar(scale);raw.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(raw),size=b.getSize(new THREE.Vector3()),center=b.getCenter(new THREE.Vector3());raw.position.x-=center.x;raw.position.z-=center.z;raw.position.y-=b.min.y;raw.updateMatrixWorld(true);modelHeight=new THREE.Box3().setFromObject(raw).getSize(new THREE.Vector3()).y;raw.traverse(o=>{if(!o.isMesh)return;o.castShadow=true;o.receiveShadow=true;if(v.type==='obj'){o.material=new THREE.MeshStandardMaterial({color:v.tint,roughness:.52,metalness:.02,clippingPlanes:[clip],clipShadows:true})}else{o.material=Array.isArray(o.material)?o.material.map(m=>cloneMaterial(m,v.tint)):cloneMaterial(o.material,v.tint)}});return raw}
+function addMaineDetails(raw,v){
+ const b=new THREE.Box3().setFromObject(raw),sz=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());
+ const mat=new THREE.MeshStandardMaterial({color:v.tint,roughness:.72,metalness:0,clippingPlanes:[clip],clipShadows:true});
+ // subtle chest fluff + ear tufts: still a domestic cat, never a lion mane
+ const chest=new THREE.Mesh(new THREE.SphereGeometry(.16,10,8),mat);chest.scale.set(1.05,1.35,.52);chest.position.set(c.x,c.y+sz.y*.02,b.max.z-sz.z*.05);chest.castShadow=true;raw.add(chest);
+ for(const x of [-1,1]){const tuft=new THREE.Mesh(new THREE.ConeGeometry(.035,.12,6),mat);tuft.position.set(c.x+x*sz.x*.18,b.max.y+.035,c.z);tuft.rotation.z=x*.16;tuft.castShadow=true;raw.add(tuft)}
+}
+function prepareModel(raw,v){raw.updateMatrixWorld(true);let b0=new THREE.Box3().setFromObject(raw),s0=b0.getSize(new THREE.Vector3());const main=Math.max(.001,s0.y),wide=Math.max(.001,s0.x,s0.z),scale=Math.min(v.target/main,(v.max||2.25)/wide);raw.scale.multiplyScalar(scale);if(v.shape){raw.scale.x*=v.shape[0];raw.scale.y*=v.shape[1];raw.scale.z*=v.shape[2]}raw.updateMatrixWorld(true);let b=new THREE.Box3().setFromObject(raw),center=b.getCenter(new THREE.Vector3());raw.position.x-=center.x;raw.position.z-=center.z;raw.position.y-=b.min.y;raw.updateMatrixWorld(true);raw.traverse(o=>{if(!o.isMesh)return;o.castShadow=true;o.receiveShadow=true;if(v.type==='obj'){o.material=new THREE.MeshStandardMaterial({color:v.tint,roughness:.52,metalness:.02,clippingPlanes:[clip],clipShadows:true})}else{o.material=Array.isArray(o.material)?o.material.map(m=>cloneMaterial(m,v.tint)):cloneMaterial(o.material,v.tint)}});if(v.maine)addMaineDetails(raw,v);raw.updateMatrixWorld(true);modelHeight=new THREE.Box3().setFromObject(raw).getSize(new THREE.Vector3()).y;return raw}
 function loadAsset(v){if(assetCache.has(v.src))return Promise.resolve(assetCache.get(v.src).clone(true));return new Promise((resolve,reject)=>{const ok=raw=>{assetCache.set(v.src,raw);resolve(raw.clone(true))};if(v.type==='gltf')gltfLoader.load(v.src+'?v='+APP_VERSION,g=>ok(g.scene),undefined,reject);else objLoader.load(v.src+'?v='+APP_VERSION,ok,undefined,reject)})}
 function rarityColor(r){return r==='Legendary'?0xffc36a:r==='Rare'?0x71cfff:0xa6b7ca}
 function selectedVariant(){const f=FAMILIES[family];let v=f.variants.find(x=>x.id===save.selected[family]);if(!v){v=f.variants[0];save.selected[family]=v.id;persist()}return v}
