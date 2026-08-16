@@ -1,0 +1,34 @@
+name: Inspect asset packs once
+on:
+  push:
+    paths:
+      - .github/workflows/inspect-assets-once.yml
+jobs:
+  inspect:
+    if: github.event.head_commit.message == 'Inspect asset packs once'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== KENNEY CUBE PETS ==='
+          curl -fL --retry 3 'https://kenney.nl/media/pages/assets/cube-pets/44e58e945f-1774520254/kenney_cube-pets_1.0.zip' -o /tmp/cube.zip
+          unzip -l /tmp/cube.zip | sed -n '1,260p'
+          echo '=== QUATERNIUS DINOSAUR PAGE LINKS ==='
+          curl -fLs 'https://quaternius.com/packs/animateddinosaurs.html' | grep -Eo 'href="[^"]+"' | sed -n '1,220p'
+          echo '=== QUATERNIUS ANIMAL PAGE LINKS ==='
+          curl -fLs 'https://quaternius.com/packs/ultimateanimatedanimals.html' | grep -Eo 'href="[^"]+"' | sed -n '1,220p'
+      - name: Self delete
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/inspect-assets-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Remove asset inspection workflow' || true
+          git push
