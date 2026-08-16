@@ -1,4 +1,4 @@
-const APP_VERSION='3.2.1';
+const APP_VERSION='3.3.1';
 (async()=>{try{const d=await fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json());if(d.version&&d.version!==APP_VERSION){const u=new URL(location.href);u.searchParams.set('v',d.version);location.replace(u)}}catch{}})();
 const $=s=>document.querySelector(s);
 const ui={cash:$('#cash'),print:$('#printButton'),bar:$('#progressBar'),eyebrow:$('#statusEyebrow'),title:$('#statusTitle'),toast:$('#toast'),flash:$('#flash'),reset:$('#resetView'),tabs:$('#familyTabs'),name:$('#modelName'),meta:$('#modelMeta'),count:$('#packCount'),picker:$('#variantPicker')};
@@ -6,11 +6,11 @@ const KEY='printer-rebuild-v3';let save={cash:0,prints:0,family:'cats',selected:
 
 const FAMILIES={
  cats:{label:'CATS',single:'CAT',range:'$10–$50',variants:[
-  {id:'british',name:'British Shorthair',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xb7c1cf,target:1.45,shape:[1.12,.94,1.10]},
-  {id:'siamese',name:'Siamese Cat',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xead8b8,target:1.52,shape:[.86,1.08,.88]},
-  {id:'tabby',name:'Orange Tabby',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xe6904a,target:1.48,shape:[1,1,1]},
-  {id:'maine',name:'Maine Coon',rarity:'Rare',value:25,weight:18,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0x8f8178,target:1.62,shape:[1.18,1.10,1.16],maine:true},
-  {id:'bengal',name:'Bengal Leopard Cat',rarity:'Legendary',value:50,weight:7,type:'gltf',src:'assets/pets/animal-tiger.glb',tint:0xe2a04f,target:1.55,shape:[.94,1.06,.96]}
+  {id:'british',name:'British Shorthair',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xaab8cc,target:1.46,shape:[1.18,.93,1.12],breed:'british'},
+  {id:'siamese',name:'Siamese Cat',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xf0dfc1,target:1.56,shape:[.80,1.15,.84],breed:'siamese'},
+  {id:'tabby',name:'Orange Tabby',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xe58b3f,target:1.49,shape:[1.02,1,1],breed:'tabby'},
+  {id:'maine',name:'Maine Coon',rarity:'Rare',value:25,weight:18,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0x84786f,target:1.68,shape:[1.24,1.10,1.18],breed:'maine'},
+  {id:'bengal',name:'Bengal Leopard Cat',rarity:'Legendary',value:50,weight:7,type:'gltf',src:'assets/pets/animal-cat.glb',tint:0xd99b43,target:1.58,shape:[.91,1.08,1.10],breed:'bengal'}
  ]},
  dinos:{label:'DINOSAURS',single:'DINOSAUR',range:'$12–$80',variants:[
   {id:'para',name:'Parasaurolophus',rarity:'Common',value:12,weight:38,type:'obj',src:'assets/dinos/Parasaurolophus.obj',tint:0x71b873,target:1.38,max:2.35},
@@ -21,8 +21,8 @@ const FAMILIES={
   {id:'trex',name:'Tyrannosaurus Rex',rarity:'Legendary',value:80,weight:6,type:'obj',src:'assets/dinos/Trex.obj',tint:0xb87948,target:1.52,max:2.35}
  ]},
  ducks:{label:'DUCKS',single:'DUCK',range:'$8–$250',variants:[
-  {id:'yellow',name:'Yellow Duck',rarity:'Common',value:8,weight:98.6,type:'obj',src:'assets/duck.obj',tint:0xf2c640,target:1.28,max:2.1},
-  {id:'ugly',name:'Ugly Duckling',rarity:'Legendary',value:250,weight:1.4,type:'obj',src:'assets/duck.obj',tint:0x20262d,target:1.28,max:2.1}
+  {id:'yellow',name:'Yellow Duck',rarity:'Common',value:8,weight:98.6,type:'obj',src:'assets/duck.obj',tint:0xf2c640,target:1.28,max:2.1,shape:[1.06,.97,1.04],duck:true},
+  {id:'ugly',name:'Ugly Duckling',rarity:'Legendary',value:250,weight:1.4,type:'obj',src:'assets/duck.obj',tint:0x252a31,target:1.30,max:2.1,shape:[1.04,.98,1.02],duck:true}
  ]}
 };
 
@@ -34,14 +34,34 @@ const printer=new THREE.Group();scene.add(printer);const dark=new THREE.MeshStan
 const BED_Y=.52,clip=new THREE.Plane(new THREE.Vector3(0,-1,0),BED_Y),modelRoot=new THREE.Group();scene.add(modelRoot);modelRoot.position.y=BED_Y;let model=null,modelHeight=1.45,state='idle',progress=0,revealAt=0,current=null,elapsed=0,family=save.family;
 const gltfLoader=new THREE.GLTFLoader(),objLoader=new THREE.OBJLoader(),assetCache=new Map();
 function cloneMaterial(mat,tint){const c=mat.clone();c.clippingPlanes=[clip];c.clipShadows=true;if(c.color)c.color.multiply(new THREE.Color(tint));c.roughness=Math.max(.32,Math.min(.72,c.roughness??.5));c.metalness=Math.min(.12,c.metalness??0);c.needsUpdate=true;return c}
-function addMaineDetails(raw,v){
+function detailMaterial(color,rough=.62){return new THREE.MeshStandardMaterial({color,roughness:rough,metalness:.01,clippingPlanes:[clip],clipShadows:true})}
+function addBreedDetails(raw,v){
  const b=new THREE.Box3().setFromObject(raw),sz=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());
- const mat=new THREE.MeshStandardMaterial({color:v.tint,roughness:.72,metalness:0,clippingPlanes:[clip],clipShadows:true});
- // subtle chest fluff + ear tufts: still a domestic cat, never a lion mane
- const chest=new THREE.Mesh(new THREE.SphereGeometry(.16,10,8),mat);chest.scale.set(1.05,1.35,.52);chest.position.set(c.x,c.y+sz.y*.02,b.max.z-sz.z*.05);chest.castShadow=true;raw.add(chest);
- for(const x of [-1,1]){const tuft=new THREE.Mesh(new THREE.ConeGeometry(.035,.12,6),mat);tuft.position.set(c.x+x*sz.x*.18,b.max.y+.035,c.z);tuft.rotation.z=x*.16;tuft.castShadow=true;raw.add(tuft)}
+ const front=b.max.z+sz.z*.008,headY=b.min.y+sz.y*.77,chestY=b.min.y+sz.y*.53;
+ const base=detailMaterial(v.tint,.68),dark=detailMaterial(0x342820,.58),cream=detailMaterial(0xf1e3c8,.72);
+ const addSphere=(mat,x,y,z,sx,sy,szc)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.1,14,10),mat);m.position.set(x,y,z);m.scale.set(sx,sy,szc);m.castShadow=true;raw.add(m);return m};
+ const addBox=(mat,x,y,z,sx,sy,szc,rz=0)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.1),mat);m.position.set(x,y,z);m.scale.set(sx,sy,szc);m.rotation.z=rz;m.castShadow=true;raw.add(m);return m};
+ const addCone=(mat,x,y,z,r,h,rz=0)=>{const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,8),mat);m.position.set(x,y,z);m.rotation.z=rz;m.castShadow=true;raw.add(m);return m};
+ if(v.breed==='british'){
+   addSphere(base,c.x-sz.x*.085,headY,front,.72,.58,.34);addSphere(base,c.x+sz.x*.085,headY,front,.72,.58,.34);addSphere(cream,c.x,headY-sz.y*.055,front+sz.z*.025,.58,.32,.22);
+ }
+ if(v.breed==='siamese'){
+   addSphere(dark,c.x,headY+sz.y*.01,front,.92,.72,.36);addCone(dark,c.x-sz.x*.16,b.max.y+sz.y*.005,c.z+sz.z*.05,sz.x*.055,sz.y*.18,-.08);addCone(dark,c.x+sz.x*.16,b.max.y+sz.y*.005,c.z+sz.z*.05,sz.x*.055,sz.y*.18,.08);for(const x of [-.22,.22])addSphere(dark,c.x+sz.x*x,b.min.y+sz.y*.10,c.z+sz.z*.16,.42,.28,.42);
+ }
+ if(v.breed==='tabby'){
+   for(let i=-2;i<=2;i++)addBox(dark,c.x+sz.x*i*.095,chestY+sz.y*(.10-Math.abs(i)*.018),front,.28,.10,.10,i*.08);addBox(dark,c.x,headY+sz.y*.12,front+sz.z*.015,.18,.34,.09,0);
+ }
+ if(v.breed==='maine'){
+   addSphere(base,c.x,chestY+sz.y*.055,front,.98,1.22,.42);addSphere(base,c.x-sz.x*.17,chestY,front-sz.z*.02,.48,.78,.32);addSphere(base,c.x+sz.x*.17,chestY,front-sz.z*.02,.48,.78,.32);addCone(base,c.x-sz.x*.17,b.max.y+sz.y*.04,c.z+sz.z*.04,sz.x*.038,sz.y*.15,-.10);addCone(base,c.x+sz.x*.17,b.max.y+sz.y*.04,c.z+sz.z*.04,sz.x*.038,sz.y*.15,.10);addSphere(base,b.min.x+sz.x*.09,b.min.y+sz.y*.57,c.z-sz.z*.18,.44,.80,.46);
+ }
+ if(v.breed==='bengal'){
+   const pts=[[-.22,.58],[-.08,.66],[.08,.57],[.22,.68],[-.17,.77],[.03,.80],[.19,.84],[-.27,.88]];for(const [px,py] of pts){addSphere(dark,c.x+sz.x*px,b.min.y+sz.y*py,front+sz.z*.012,.24,.18,.085);addSphere(base,c.x+sz.x*px,b.min.y+sz.y*py,front+sz.z*.022,.10,.075,.055)}
+ }
 }
-function prepareModel(raw,v){raw.updateMatrixWorld(true);let b0=new THREE.Box3().setFromObject(raw),s0=b0.getSize(new THREE.Vector3());const main=Math.max(.001,s0.y),wide=Math.max(.001,s0.x,s0.z),scale=Math.min(v.target/main,(v.max||2.25)/wide);raw.scale.multiplyScalar(scale);if(v.shape){raw.scale.x*=v.shape[0];raw.scale.y*=v.shape[1];raw.scale.z*=v.shape[2]}raw.updateMatrixWorld(true);let b=new THREE.Box3().setFromObject(raw),center=b.getCenter(new THREE.Vector3());raw.position.x-=center.x;raw.position.z-=center.z;raw.position.y-=b.min.y;raw.updateMatrixWorld(true);raw.traverse(o=>{if(!o.isMesh)return;o.castShadow=true;o.receiveShadow=true;if(v.type==='obj'){o.material=new THREE.MeshStandardMaterial({color:v.tint,roughness:.52,metalness:.02,clippingPlanes:[clip],clipShadows:true})}else{o.material=Array.isArray(o.material)?o.material.map(m=>cloneMaterial(m,v.tint)):cloneMaterial(o.material,v.tint)}});if(v.maine)addMaineDetails(raw,v);raw.updateMatrixWorld(true);modelHeight=new THREE.Box3().setFromObject(raw).getSize(new THREE.Vector3()).y;return raw}
+function addDuckDetails(raw,v){
+ const b=new THREE.Box3().setFromObject(raw),sz=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());const front=b.max.z+sz.z*.012,headY=b.min.y+sz.y*.78;const beak=detailMaterial(v.id==='ugly'?0xb87945:0xef8d2f,.5),eye=detailMaterial(v.id==='ugly'?0xe7e2d9:0x12161a,.48);const bill=new THREE.Mesh(new THREE.BoxGeometry(sz.x*.23,sz.y*.075,sz.z*.16),beak);bill.position.set(c.x,headY-sz.y*.04,front+sz.z*.045);bill.castShadow=true;raw.add(bill);for(const x of [-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(sz.x*.035,10,8),eye);e.position.set(c.x+x*sz.x*.12,headY+sz.y*.08,front+sz.z*.01);e.scale.z=.62;e.castShadow=true;raw.add(e)}
+}
+function prepareModel(raw,v){raw.updateMatrixWorld(true);let b0=new THREE.Box3().setFromObject(raw),s0=b0.getSize(new THREE.Vector3());const main=Math.max(.001,s0.y),wide=Math.max(.001,s0.x,s0.z),scale=Math.min(v.target/main,(v.max||2.25)/wide);raw.scale.multiplyScalar(scale);if(v.shape){raw.scale.x*=v.shape[0];raw.scale.y*=v.shape[1];raw.scale.z*=v.shape[2]}raw.updateMatrixWorld(true);let b=new THREE.Box3().setFromObject(raw),center=b.getCenter(new THREE.Vector3());raw.position.x-=center.x;raw.position.z-=center.z;raw.position.y-=b.min.y;raw.updateMatrixWorld(true);raw.traverse(o=>{if(!o.isMesh)return;o.castShadow=true;o.receiveShadow=true;if(v.type==='obj'){o.material=new THREE.MeshStandardMaterial({color:v.tint,roughness:.52,metalness:.02,clippingPlanes:[clip],clipShadows:true})}else{o.material=Array.isArray(o.material)?o.material.map(m=>cloneMaterial(m,v.tint)):cloneMaterial(o.material,v.tint)}});if(v.breed)addBreedDetails(raw,v);if(v.duck)addDuckDetails(raw,v);raw.updateMatrixWorld(true);modelHeight=new THREE.Box3().setFromObject(raw).getSize(new THREE.Vector3()).y;return raw}
 function loadAsset(v){if(assetCache.has(v.src))return Promise.resolve(assetCache.get(v.src).clone(true));return new Promise((resolve,reject)=>{const ok=raw=>{assetCache.set(v.src,raw);resolve(raw.clone(true))};if(v.type==='gltf')gltfLoader.load(v.src+'?v='+APP_VERSION,g=>ok(g.scene),undefined,reject);else objLoader.load(v.src+'?v='+APP_VERSION,ok,undefined,reject)})}
 function rarityColor(r){return r==='Legendary'?0xffc36a:r==='Rare'?0x71cfff:0xa6b7ca}
 function selectedVariant(){const f=FAMILIES[family];let v=f.variants.find(x=>x.id===save.selected[family]);if(!v){v=f.variants[0];save.selected[family]=v.id;persist()}return v}
