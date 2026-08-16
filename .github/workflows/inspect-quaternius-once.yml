@@ -1,0 +1,31 @@
+name: Inspect Quaternius download once
+on:
+  push:
+    paths:
+      - .github/workflows/inspect-quaternius-once.yml
+jobs:
+  inspect:
+    if: github.event.head_commit.message == 'Inspect Quaternius download once'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect dinosaur download markup
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLs 'https://quaternius.com/packs/animateddinosaurs.html' -o /tmp/page.html
+          echo '=== DOWNLOAD/INLINE CONTEXT ==='
+          grep -niE 'download|inline|zip|drive|itch|dropbox|mega|href|src=' /tmp/page.html | tail -n 140
+          echo '=== SCRIPTS ==='
+          grep -niE '<script|\.js' /tmp/page.html | tail -n 80
+      - name: Self delete
+        shell: bash
+        run: |
+          rm -f .github/workflows/inspect-quaternius-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Remove Quaternius inspection workflow' || true
+          git push
