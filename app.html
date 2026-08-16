@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#080d16" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>3D Printer Online — Test Build 3.6.1</title>
+  <link rel="stylesheet" href="style.css?v=3.6.1" />
+</head>
+<body>
+  <main id="app">
+    <div id="scene"></div>
+    <header class="topbar">
+      <div class="brand"><b>3D PRINTER ONLINE</b><span>STABLE RUNTIME BUILD 3.6.1</span></div>
+      <div class="top-actions">
+        <button id="resetView" class="chip">RESET VIEW</button>
+        <div id="cash" class="cash">$0</div>
+      </div>
+    </header>
+
+    <section class="hero-status">
+      <small id="statusEyebrow">TINY PACK • REAL MESHES</small>
+      <h1 id="statusTitle">READY TO PRINT</h1>
+    </section>
+
+    <section class="bottom-panel">
+      <div class="family-tabs" id="familyTabs">
+        <button class="family-tab active" data-family="cats"><b>CATS</b><span>$10–$50</span></button>
+        <button class="family-tab" data-family="dinos"><b>DINOSAURS</b><span>$12–$80</span></button>
+        <button class="family-tab" data-family="ducks"><b>DUCKS</b><span>$8–$250</span></button>
+      </div>
+      <div class="variant-picker" id="variantPicker" aria-label="Choose exact model"></div>
+      <div class="model-row">
+        <div>
+          <div id="modelName" class="model-name">Cats</div>
+          <div id="modelMeta" class="model-meta">TEST MODE • choose exact collectible</div>
+        </div>
+        <div class="value"><small>VALUE</small><strong id="packCount">$10</strong></div>
+      </div>
+      <div class="progress-track"><div id="progressBar"></div></div>
+      <button id="printButton" class="print-button">PRINT BRITISH SHORTHAIR</button>
+      <div class="hint">DRAG TO ROTATE • WHEEL / PINCH TO ZOOM</div>
+    </section>
+
+    <div id="toast" class="toast"></div>
+    <div id="flash" class="flash"></div>
+  </main>
+  <script src="vendor/three.min.js?v=3.6.1"></script>
+  <script src="vendor/GLTFLoader.js?v=3.6.1"></script>
+  <script src="vendor/OBJLoader.js?v=3.6.1"></script>
+  <script src="app.js?v=3.6.1"></script>
+</body>
+</html>
