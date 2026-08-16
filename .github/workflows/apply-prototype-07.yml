@@ -1,0 +1,39 @@
+name: Apply Prototype 0.7
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add print time controls
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          s=s.replace('Prototype 0.6','Prototype 0.7')
+          s=s.replace('id="versionLabel">0.6<','id="versionLabel">0.7<')
+          s=s.replace("const APP_VERSION='0.6';","const APP_VERSION='0.7';")
+          s=s.replace('.cash{padding:10px 14px;', '.top-actions{display:flex;gap:8px;align-items:center;pointer-events:auto}.time-btn{border:1px solid rgba(255,255,255,.12);background:rgba(7,12,21,.76);color:#fff;border-radius:16px;padding:10px 12px;font-weight:900;cursor:pointer;box-shadow:0 12px 34px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.08)}.time-btn:active{transform:scale(.97)}.cash{padding:10px 14px;')
+          s=s.replace('<div class="cash" id="cash">$0</div>', '<div class="top-actions"><button class="time-btn" id="timeButton">TIME 1×</button><div class="cash" id="cash">$0</div></div>')
+          s=s.replace("cash:$('#cash'),main:$('#mainButton'),", "cash:$('#cash'),time:$('#timeButton'),main:$('#mainButton'),")
+          s=s.replace("let saveData={cash:0,speed:0,extruder:0,sales:0,selected:'duck'};", "let saveData={cash:0,speed:0,extruder:0,sales:0,selected:'duck'};let timeScale=1;const TIME_SCALES=[1,.5,.25];")
+          s=s.replace("function getDuration(){return selected.time*Math.pow(.82,saveData.speed)}", "function getDuration(){return selected.time*Math.pow(.82,saveData.speed)/timeScale}")
+          marker="ui.main.onclick=()=> state==='complete' ? sellCurrent() : startPrint();"
+          insert="""ui.time.onclick=()=>{const i=TIME_SCALES.indexOf(timeScale);timeScale=TIME_SCALES[(i+1)%TIME_SCALES.length];ui.time.textContent='TIME '+timeScale+'×';toast(timeScale===1?'NORMAL SPEED':timeScale+'× SLOW MOTION');};\n  """
+          s=s.replace(marker, insert+marker)
+          p.write_text(s)
+          Path('version.json').write_text('{\n  "version": "0.7"\n}\n')
+          PY
+      - name: Commit Prototype 0.7
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html version.json
+          git diff --cached --quiet || git commit -m "Prototype 0.7 add slow-motion print controls"
+          git push
