@@ -1,0 +1,37 @@
+name: Diagnose cat GLB once
+on:
+  push:
+    paths:
+      - '.github/workflows/diag-glb-once.yml'
+jobs:
+  diag:
+    if: github.event.head_commit.message == 'Diagnose cat GLB once'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect GLB
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const b=fs.readFileSync('assets/cat.glb');
+          console.log('magic',b.subarray(0,4).toString(),'version',b.readUInt32LE(4),'length',b.readUInt32LE(8),'actual',b.length);
+          const jsonLen=b.readUInt32LE(12), jsonType=b.subarray(16,20).toString();
+          const json=JSON.parse(b.subarray(20,20+jsonLen).toString('utf8').replace(/\u0000+|\s+$/g,''));
+          console.log('asset',json.asset);
+          console.log('extensionsUsed',json.extensionsUsed);
+          console.log('extensionsRequired',json.extensionsRequired);
+          console.log('images',json.images);
+          console.log('textures',json.textures);
+          console.log('materials',JSON.stringify(json.materials,null,2));
+          console.log('animations',json.animations?.length||0,'skins',json.skins?.length||0,'meshes',json.meshes?.length||0);
+          NODE
+      - name: Self delete
+        run: |
+          rm -f .github/workflows/diag-glb-once.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'Remove GLB diagnostic workflow' || true
+          git push
