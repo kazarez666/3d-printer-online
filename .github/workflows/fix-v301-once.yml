@@ -1,0 +1,48 @@
+name: Fix Rebuild 3.0.1 asset loading once
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-v301-once.yml'
+jobs:
+  fix:
+    if: github.event.head_commit.message == 'Fix Rebuild 3.0.1 asset loading once'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add missing Kenney texture and bump cache version
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://kenney.nl/media/pages/assets/cube-pets/44e58e945f-1774520254/kenney_cube-pets_1.0.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/cube.zip
+          rm -rf /tmp/cube && mkdir -p /tmp/cube
+          unzip -q /tmp/cube.zip -d /tmp/cube
+          TEX=$(find /tmp/cube -type f -ipath '*/Textures/colormap.png' | head -n 1 || true)
+          if [ -z "$TEX" ]; then
+            TEX=$(find /tmp/cube -type f -iname 'colormap.png' | head -n 1 || true)
+          fi
+          test -n "$TEX"
+          mkdir -p assets/Textures
+          cp "$TEX" assets/Textures/colormap.png
+          test -s assets/Textures/colormap.png
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app.js'); s=p.read_text(); s=s.replace("APP_VERSION='3.0'","APP_VERSION='3.0.1'").replace("cat.glb?v=3.0","cat.glb?v=3.0.1"); p.write_text(s)
+          p=Path('index.html'); s=p.read_text().replace('Rebuild 3.0','Rebuild 3.0.1').replace('REBUILD 3.0','REBUILD 3.0.1').replace('?v=3.0','?v=3.0.1'); p.write_text(s)
+          Path('version.json').write_text('{"version":"3.0.1"}\n')
+          PY
+          node --check app.js
+          grep -q "APP_VERSION='3.0.1'" app.js
+          grep -q 'REBUILD 3.0.1' index.html
+      - name: Commit fix and self-delete
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/fix-v301-once.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'Rebuild 3.0.1 fix Kenney texture loading'
+          git push
