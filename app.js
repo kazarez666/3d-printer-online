@@ -1,4 +1,4 @@
-const APP_VERSION='3.5';
+const APP_VERSION='3.6';
 (async()=>{try{const d=await fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json());if(d.version&&d.version!==APP_VERSION){const u=new URL(location.href);u.searchParams.set('v',d.version);location.replace(u)}}catch{}})();
 const $=s=>document.querySelector(s);
 const ui={cash:$('#cash'),print:$('#printButton'),bar:$('#progressBar'),eyebrow:$('#statusEyebrow'),title:$('#statusTitle'),toast:$('#toast'),flash:$('#flash'),reset:$('#resetView'),tabs:$('#familyTabs'),name:$('#modelName'),meta:$('#modelMeta'),count:$('#packCount'),picker:$('#variantPicker')};
@@ -6,11 +6,11 @@ const KEY='printer-rebuild-v3';let save={cash:0,prints:0,family:'cats',selected:
 
 const FAMILIES={
  cats:{label:'CATS',single:'CAT',range:'$10–$50',variants:[
-  {id:'british',name:'British Shorthair',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/BritishShorthair.obj',tint:0xaeb9c8,target:1.52,max:2.25},
-  {id:'siamese',name:'Siamese Cat',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/SiameseCat.obj',tint:0xe7d3ad,target:1.58,max:2.25},
-  {id:'tabby',name:'Orange Tabby',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/OrangeTabby.obj',tint:0xde8741,target:1.54,max:2.25},
-  {id:'maine',name:'Maine Coon',rarity:'Rare',value:25,weight:18,type:'obj',src:'assets/cats/MaineCoon.obj',tint:0x827870,target:1.64,max:2.30},
-  {id:'bengal',name:'Bengal Leopard Cat',rarity:'Legendary',value:50,weight:7,type:'obj',src:'assets/cats/BengalCat.obj',tint:0xd69a47,target:1.60,max:2.30}
+  {id:'british',name:'British Shorthair',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/BritishShorthair.obj',tint:0xaeb9c8,target:1.52,max:2.25,shape:[.94,1,.90]},
+  {id:'siamese',name:'Siamese Cat',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/SiameseCat.obj',tint:0xe7d3ad,target:1.58,max:2.25,shape:[.84,1.03,.84]},
+  {id:'tabby',name:'Orange Tabby',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/OrangeTabby.obj',tint:0xde8741,target:1.54,max:2.25,shape:[.90,1,.88]},
+  {id:'maine',name:'Maine Coon',rarity:'Rare',value:25,weight:18,type:'obj',src:'assets/cats/MaineCoon.obj',tint:0x827870,target:1.64,max:2.30,shape:[.91,1.02,.89]},
+  {id:'bengal',name:'Bengal Leopard Cat',rarity:'Legendary',value:50,weight:7,type:'obj',src:'assets/cats/BengalCat.obj',tint:0xd69a47,target:1.60,max:2.30,shape:[.82,1.04,.80]}
  ]},
  dinos:{label:'DINOSAURS',single:'DINOSAUR',range:'$12–$80',variants:[
   {id:'para',name:'Parasaurolophus',rarity:'Common',value:12,weight:38,type:'obj',src:'assets/dinos/Parasaurolophus.obj',tint:0x71b873,target:1.38,max:2.35},
@@ -55,11 +55,25 @@ function addBreedDetails(raw,v){
    addSphere(base,c.x,chestY+sz.y*.055,front,.98,1.22,.42);addSphere(base,c.x-sz.x*.17,chestY,front-sz.z*.02,.48,.78,.32);addSphere(base,c.x+sz.x*.17,chestY,front-sz.z*.02,.48,.78,.32);addCone(base,c.x-sz.x*.17,b.max.y+sz.y*.04,c.z+sz.z*.04,sz.x*.038,sz.y*.15,-.10);addCone(base,c.x+sz.x*.17,b.max.y+sz.y*.04,c.z+sz.z*.04,sz.x*.038,sz.y*.15,.10);addSphere(base,b.min.x+sz.x*.09,b.min.y+sz.y*.57,c.z-sz.z*.18,.44,.80,.46);
  }
  if(v.breed==='bengal'){
-   const pts=[[-.22,.58],[-.08,.66],[.08,.57],[.22,.68],[-.17,.77],[.03,.80],[.19,.84],[-.27,.88]];for(const [px,py] of pts){addSphere(dark,c.x+sz.x*px,b.min.y+sz.y*py,front+sz.z*.012,.24,.18,.085);addSphere(base,c.x+sz.x*px,b.min.y+sz.y*py,front+sz.z*.022,.10,.075,.055)}
+   const spot=detailMaterial(0x4b2e1d,.54),inner=detailMaterial(0xd7a15c,.66);
+   const rosette=(px,py,side=1,sc=1)=>{const z=side>0?b.max.z+sz.z*.014:b.min.z-sz.z*.014;addSphere(spot,c.x+sz.x*px,b.min.y+sz.y*py,z,.30*sc,.22*sc,.085);addSphere(inner,c.x+sz.x*px,b.min.y+sz.y*py,z+(side>0?sz.z*.012:-sz.z*.012),.145*sc,.105*sc,.055)};
+   const pts=[[-.28,.55,1,1],[-.10,.59,1,.9],[.10,.55,1,.9],[.27,.62,1,.95],[-.22,.70,1,.85],[-.02,.73,1,1],[.20,.76,1,.82],[-.27,.84,1,.78],[-.08,.88,1,.75],[.16,.91,1,.72],[-.26,.57,-1,.9],[-.06,.61,-1,1],[.16,.57,-1,.85],[.28,.68,-1,.9],[-.18,.74,-1,.82],[.03,.78,-1,.92],[.22,.84,-1,.74],[-.10,.89,-1,.72]];
+   pts.forEach(q=>rosette(q[0],q[1],q[2],q[3]));
+   addBox(spot,c.x-sz.x*.12,headY+sz.y*.06,front+sz.z*.012,.20,.10,.08,-.15);addBox(spot,c.x+sz.x*.10,headY+sz.y*.09,front+sz.z*.012,.18,.09,.08,.14);
  }
 }
 function addDuckDetails(raw,v){
- const b=new THREE.Box3().setFromObject(raw),sz=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());const front=b.max.z+sz.z*.012,headY=b.min.y+sz.y*.78;const beak=detailMaterial(v.id==='ugly'?0xb87945:0xef8d2f,.5),eye=detailMaterial(v.id==='ugly'?0xe7e2d9:0x12161a,.48);const bill=new THREE.Mesh(new THREE.BoxGeometry(sz.x*.23,sz.y*.075,sz.z*.16),beak);bill.position.set(c.x,headY-sz.y*.04,front+sz.z*.045);bill.castShadow=true;raw.add(bill);for(const x of [-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(sz.x*.035,10,8),eye);e.position.set(c.x+x*sz.x*.12,headY+sz.y*.08,front+sz.z*.01);e.scale.z=.62;e.castShadow=true;raw.add(e)}
+ const b=new THREE.Box3().setFromObject(raw),sz=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());
+ const front=b.max.z+sz.z*.012,headY=b.min.y+sz.y*.78,bodyY=b.min.y+sz.y*.48;
+ const isUgly=v.id==='ugly';
+ const beak=detailMaterial(isUgly?0xc17b45:0xf28c28,.48),eye=detailMaterial(0x12161a,.45),wing=detailMaterial(isUgly?0x161a20:0xd9a71f,.62),belly=detailMaterial(isUgly?0x747d88:0xffe59a,.68),feet=detailMaterial(isUgly?0xb87945:0xe87924,.55),cheek=detailMaterial(isUgly?0x9098a3:0xffefad,.72);
+ const addSphere=(mat,x,y,z,sx,sy,szc)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.1,14,10),mat);m.position.set(x,y,z);m.scale.set(sx,sy,szc);m.castShadow=true;raw.add(m);return m};
+ const bill=new THREE.Mesh(new THREE.BoxGeometry(sz.x*.24,sz.y*.075,sz.z*.17),beak);bill.position.set(c.x,headY-sz.y*.04,front+sz.z*.05);bill.castShadow=true;raw.add(bill);
+ for(const x of [-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(sz.x*.035,10,8),eye);e.position.set(c.x+x*sz.x*.12,headY+sz.y*.08,front+sz.z*.012);e.scale.z=.62;e.castShadow=true;raw.add(e)}
+ addSphere(wing,c.x-sz.x*.31,bodyY,c.z,sz.x*2.2,sz.y*.72,sz.z*1.25);addSphere(wing,c.x+sz.x*.31,bodyY,c.z,sz.x*2.2,sz.y*.72,sz.z*1.25);
+ addSphere(belly,c.x,bodyY+sz.y*.04,front+sz.z*.004,sz.x*2.4,sz.y*1.7,sz.z*.34);
+ addSphere(cheek,c.x-sz.x*.13,headY-sz.y*.02,front+sz.z*.015,sz.x*.62,sz.y*.38,sz.z*.22);addSphere(cheek,c.x+sz.x*.13,headY-sz.y*.02,front+sz.z*.015,sz.x*.62,sz.y*.38,sz.z*.22);
+ addSphere(feet,c.x-sz.x*.16,b.min.y+sz.y*.04,c.z+sz.z*.13,sz.x*.95,sz.y*.28,sz.z*.75);addSphere(feet,c.x+sz.x*.16,b.min.y+sz.y*.04,c.z+sz.z*.13,sz.x*.95,sz.y*.28,sz.z*.75);
 }
 function prepareModel(raw,v){raw.updateMatrixWorld(true);let b0=new THREE.Box3().setFromObject(raw),s0=b0.getSize(new THREE.Vector3());const main=Math.max(.001,s0.y),wide=Math.max(.001,s0.x,s0.z),scale=Math.min(v.target/main,(v.max||2.25)/wide);raw.scale.multiplyScalar(scale);if(v.shape){raw.scale.x*=v.shape[0];raw.scale.y*=v.shape[1];raw.scale.z*=v.shape[2]}raw.updateMatrixWorld(true);let b=new THREE.Box3().setFromObject(raw),center=b.getCenter(new THREE.Vector3());raw.position.x-=center.x;raw.position.z-=center.z;raw.position.y-=b.min.y;raw.updateMatrixWorld(true);raw.traverse(o=>{if(!o.isMesh)return;o.castShadow=true;o.receiveShadow=true;if(v.type==='obj'){let col=v.tint;const n=(o.name||'').toLowerCase();if(n.includes('detail_eye'))col=0x15181d;else if(n.includes('detail_nose'))col=0x8f625c;else if(n.includes('mark_dark'))col=v.id==='siamese'?0x4c3d39:v.id==='bengal'?0x563927:0x66452f;else if(n.includes('mark_cream'))col=v.id==='siamese'?0xe9d8bb:0xead9bd;o.material=new THREE.MeshStandardMaterial({color:col,roughness:.58,metalness:.015,flatShading:true,transparent:false,opacity:1,alphaTest:0,depthWrite:true,depthTest:true,side:THREE.DoubleSide,clippingPlanes:[clip],clipShadows:true})}else{o.material=Array.isArray(o.material)?o.material.map(m=>cloneMaterial(m,v.tint)):cloneMaterial(o.material,v.tint)}});if(v.duck)addDuckDetails(raw,v);raw.updateMatrixWorld(true);modelHeight=new THREE.Box3().setFromObject(raw).getSize(new THREE.Vector3()).y;return raw}
 function loadAsset(v){if(assetCache.has(v.src))return Promise.resolve(assetCache.get(v.src).clone(true));return new Promise((resolve,reject)=>{const ok=raw=>{assetCache.set(v.src,raw);resolve(raw.clone(true))};if(v.type==='gltf')gltfLoader.load(v.src+'?v='+APP_VERSION,g=>ok(g.scene),undefined,reject);else objLoader.load(v.src+'?v='+APP_VERSION,ok,undefined,reject)})}
