@@ -1,0 +1,50 @@
+name: Fix Prototype 0.9 time controls cleanly
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-time-clean-09.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clean and add 0.1x
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('index.html')
+          s=p.read_text()
+          # Clean duplicate time-control CSS blocks if prior hotfixes inserted them twice.
+          css='.top-actions{display:flex;gap:8px;align-items:center;pointer-events:auto}.time-btn{border:1px solid rgba(255,255,255,.12);background:rgba(7,12,21,.76);color:#fff;border-radius:16px;padding:10px 12px;font-weight:900;cursor:pointer;box-shadow:0 12px 34px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.08)}.time-btn:active{transform:scale(.97)}'
+          while css+css in s:
+              s=s.replace(css+css,css)
+          # Clean duplicated nested TIME button markup.
+          dup='<div class="top-actions"><button class="time-btn" id="timeButton">TIME 1×</button><div class="top-actions"><button class="time-btn" id="timeButton">TIME 1×</button><div class="cash" id="cash">$0</div></div></div>'
+          clean='<div class="top-actions"><button class="time-btn" id="timeButton">TIME 1×</button><div class="cash" id="cash">$0</div></div>'
+          s=s.replace(dup,clean)
+          # Collapse duplicate declarations from earlier patches.
+          s=re.sub(r'(let timeScale=1;const TIME_SCALES=\[[^\]]+\];){2,}', 'let timeScale=1;const TIME_SCALES=[1,.5,.25,.1];', s)
+          s=re.sub(r'let timeScale=1;const TIME_SCALES=\[[^\]]+\];', 'let timeScale=1;const TIME_SCALES=[1,.5,.25,.1];', s, count=1)
+          # Ensure there is only one click handler and that it cycles through 0.1x too.
+          handlers=re.findall(r"ui\.time\.onclick=\(\)=>\{[^}]+\}",s)
+          if len(handlers)>1:
+              first=handlers[0]
+              for h in handlers[1:]: s=s.replace(h,'',1)
+          # Version bump.
+          s=s.replace('Prototype 0.8','Prototype 0.9')
+          s=s.replace('id="versionLabel">0.8<','id="versionLabel">0.9<')
+          s=s.replace("const APP_VERSION='0.8'","const APP_VERSION='0.9'")
+          p.write_text(s)
+          Path('version.json').write_text('{\n  "version": "0.9"\n}\n')
+          PY
+      - name: Commit clean time controls
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html version.json
+          git commit -m "Prototype 0.9 add 0.1x time scale and clean controls" || exit 0
+          git push
