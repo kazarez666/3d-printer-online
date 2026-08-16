@@ -4,7 +4,7 @@ const asset25Cache={};
 const asset25Pending={};
 function asset25Path(v,f){if(f!=='cats'&&f!=='dinos'&&f!=='ducks')return null;return `assets/tiny/${f}_${v.id}.glb?v=${APP_VERSION}`}
 function asset25BodyMaterial(v,f){
- if(f==='cats')return mkMat(v.base,{map:v.kind==='bengal'?bengalTex:v.kind==='tabby'?tabbyTex:null,roughness:(v.kind==='siamese'||v.kind==='bengal')?.38:.44,clearcoat:.1,clearcoatRoughness:.5});
+ if(f==='cats')return mkMat(v.base,{map:v.kind==='bengal'?bengalTex:v.kind==='tabby'?tabbyTex:null,roughness:(v.kind==='siamese'||v.kind==='bengal')?0.38:0.44,clearcoat:.1,clearcoatRoughness:.5});
  if(f==='dinos')return mkMat(v.base,{map:v.kind==='trex'?rexTex:null,roughness:.48,clearcoat:.025});
  return mkMat(v.base,{roughness:.4,clearcoat:.11,clearcoatRoughness:.48});
 }

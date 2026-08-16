@@ -1,4 +1,4 @@
-const APP_VERSION='2.4';
+const APP_VERSION='2.5';
 (async()=>{try{const d=await fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json());if(d.version&&d.version!==APP_VERSION){const u=new URL(location.href);u.searchParams.set('v',d.version);location.replace(u)}}catch{}})();
 const $=s=>document.querySelector(s);
 const ui={cash:$('#cash'),pack:$('#packButton'),view:$('#viewButton'),time:$('#timeButton'),main:$('#mainButton'),buy:$('#printerButton'),bar:$('#progressBar'),small:$('#statusSmall'),big:$('#statusBig'),toast:$('#toast'),flash:$('#flash'),selector:$('#selector'),title:$('#familyTitle'),sub:$('#familySub'),value:$('#familyValue')};
@@ -39,12 +39,12 @@ let state='idle',variant=null,active=null,elapsed=0,prog=0,timeScale=1,revealSta
 
 const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x07101d,10,22);
 const camera=new THREE.PerspectiveCamera(33,innerWidth/innerHeight,.1,60);
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.localClippingEnabled=true;renderer.outputEncoding=THREE.sRGBEncoding;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;$('#scene').appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xeaf2ff,0x100c0a,1.34));
-const keyLight=new THREE.DirectionalLight(0xfffcf6,2.45);keyLight.position.set(4.4,7.4,5.0);keyLight.castShadow=true;keyLight.shadow.mapSize.set(1536,1536);keyLight.shadow.bias=-.00028;scene.add(keyLight);
-const fillLight=new THREE.PointLight(0xaac8ff,2.5,9,2);fillLight.position.set(-2.4,3.2,4);scene.add(fillLight);
-const rim=new THREE.PointLight(0x69a9ff,7.2,11,2);rim.position.set(-4,3.7,-3.6);scene.add(rim);
-const warmLight=new THREE.PointLight(0xffbd73,2.9,8,2);warmLight.position.set(3.2,2.2,3.2);scene.add(warmLight);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.localClippingEnabled=true;renderer.outputEncoding=THREE.sRGBEncoding;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.92;$('#scene').appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xeaf2ff,0x100c0a,1.16));
+const keyLight=new THREE.DirectionalLight(0xfffcf6,1.9);keyLight.position.set(4.4,7.4,5.0);keyLight.castShadow=true;keyLight.shadow.mapSize.set(1536,1536);keyLight.shadow.bias=-.00028;scene.add(keyLight);
+const fillLight=new THREE.PointLight(0xaac8ff,1.25,9,2);fillLight.position.set(-2.4,3.2,4);scene.add(fillLight);
+const rim=new THREE.PointLight(0x69a9ff,4.6,11,2);rim.position.set(-4,3.7,-3.6);scene.add(rim);
+const warmLight=new THREE.PointLight(0xffbd73,1.45,8,2);warmLight.position.set(3.2,2.2,3.2);scene.add(warmLight);
 const revealLight=new THREE.PointLight(0xffffff,0,5.5,2);revealLight.position.set(0,2.4,1.8);scene.add(revealLight);
 const floor=new THREE.Mesh(new THREE.CircleGeometry(8,64),new THREE.MeshStandardMaterial({color:0x0d1726,roughness:.95,metalness:.02}));floor.rotation.x=-Math.PI/2;floor.position.y=-.04;floor.receiveShadow=true;scene.add(floor);
 
