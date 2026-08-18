@@ -1,0 +1,132 @@
+name: Cat silhouette polish 4.1 once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cats-polish-41.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refine cat silhouettes and breed colors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          ROOT=Path('assets/cats')
+          cfg={
+            'BritishShorthair.obj':dict(width=.975,length=1.000,height=1.000,waist=.975,head=1.025,muzzle=.985,leg=.985),
+            'SiameseCat.obj':dict(width=.935,length=1.035,height=1.025,waist=.955,head=.930,muzzle=.900,leg=.955),
+            'OrangeTabby.obj':dict(width=.960,length=1.020,height=1.010,waist=.965,head=.980,muzzle=.955,leg=.970),
+            'MaineCoon.obj':dict(width=.965,length=1.045,height=1.020,waist=.970,head=1.005,muzzle=.970,leg=.970),
+            'BengalCat.obj':dict(width=.920,length=1.060,height=1.030,waist=.950,head=.930,muzzle=.900,leg=.950),
+          }
+
+          for fname,p in cfg.items():
+              path=ROOT/fname
+              lines=path.read_text().splitlines()
+              verts=[]
+              for line in lines:
+                  if line.startswith('v '):
+                      q=line.split(); verts.append([float(q[1]),float(q[2]),float(q[3])])
+              if not verts: raise SystemExit('No vertices in '+fname)
+              xs=[v[0] for v in verts]; ys=[v[1] for v in verts]; zs=[v[2] for v in verts]
+              xmin,xmax=min(xs),max(xs); ymin,ymax=min(ys),max(ys); zmin,zmax=min(zs),max(zs)
+              cx=(xmin+xmax)/2; cz=(zmin+zmax)/2
+              yr=max(ymax-ymin,1e-9); zr=max(zmax-zmin,1e-9)
+
+              out=[]; vi=0
+              out.append('# 3D Printer Online 4.1 refined collectible cat silhouette')
+              for line in lines:
+                  if line.startswith('#'): continue
+                  if not line.startswith('v '):
+                      out.append(line); continue
+                  x,y,z=verts[vi]; vi+=1
+                  yn=(y-ymin)/yr; zn=(z-zmin)/zr
+
+                  # Subtle global breed proportions; preserve the successful 4.0 direction.
+                  x=cx+(x-cx)*p['width']
+                  z=cz+(z-cz)*p['length']
+                  y=ymin+(y-ymin)*p['height']
+
+                  # Elegant waist between rear body and shoulders; keep chest readable.
+                  if .30 < zn < .62 and .28 < yn < .78:
+                      t=1-abs(zn-.46)/.16
+                      t=max(0,min(1,t))
+                      x=cx+(x-cx)*(1-(1-p['waist'])*t)
+
+                  # Head and muzzle taper. This reduces the toy-block look without making the face tiny.
+                  if zn>.70 and yn>.48:
+                      t=min(1,(zn-.70)/.30)
+                      hs=1+(p['head']-1)*(1-t*.35)
+                      x=cx+(x-cx)*hs
+                  if zn>.88 and yn>.52:
+                      t=min(1,(zn-.88)/.12)
+                      x=cx+(x-cx)*(1+(p['muzzle']-1)*t)
+                      y-=yr*.010*t
+
+                  # Legs taper toward the paws, while the upper leg stays broad enough to blend into the torso.
+                  if yn<.46 and abs(x-cx)>(xmax-xmin)*.10:
+                      t=max(0,min(1,(.46-yn)/.46))
+                      x=cx+(x-cx)*(1+(p['leg']-1)*t)
+                  # Small paw flare at the very bottom; part of the same connected leg, not a separate block.
+                  if yn<.085:
+                      t=(.085-yn)/.085
+                      x=cx+(x-cx)*(1+.025*t)
+
+                  # Slight shoulder/chest lift makes the silhouette less cylindrical.
+                  if .58<zn<.76 and .42<yn<.78:
+                      y+=yr*.010
+
+                  out.append(f'v {x:.6f} {y:.6f} {z:.6f}')
+              path.write_text('\n'.join(out)+'\n')
+              print(fname,'polished',len(verts),'vertices')
+
+          app=Path('app.js'); s=app.read_text()
+          if "const APP_VERSION='4.0';" not in s: raise SystemExit('Expected app.js 4.0')
+          s=s.replace("const APP_VERSION='4.0';","const APP_VERSION='4.1';",1)
+          replacements={
+            "tint:0xb7c3d2":"tint:0xb9c4d0",
+            "tint:0xf0dfbf":"tint:0xead8b9",
+            "tint:0xe08d48":"tint:0xd87f38",
+            "tint:0x8b7564":"tint:0x7e6858",
+            "tint:0xe0a24f":"tint:0xd89a43",
+          }
+          for a,b in replacements.items():
+              if a not in s: raise SystemExit('Missing color '+a)
+              s=s.replace(a,b,1)
+
+          old="if(n.includes('detail_eye'))col=v.id==='siamese'?0x31506e:0x17191f;else if(n.includes('detail_nose'))col=v.id==='bengal'?0x7d4b43:0x9a6761;else if(n.includes('mark_dark'))col=v.id==='siamese'?0x493832:v.id==='bengal'?0x4a2b18:v.id==='tabby'?0x8b4f2d:v.id==='maine'?0x5a4337:0x687486;else if(n.includes('mark_warm'))col=v.id==='bengal'?0xc9823f:0xb86838;else if(n.includes('mark_cream'))col=v.id==='bengal'?0xf0d7a5:v.id==='siamese'?0xead8bb:v.id==='maine'?0xdcc5a4:0xe3e8ee;"
+          new="if(n.includes('detail_eye'))col=v.id==='siamese'?0x315d8c:v.id==='british'?0x6d9075:v.id==='tabby'?0x76965b:v.id==='maine'?0xc19a4f:0x8ba34f;else if(n.includes('detail_nose'))col=v.id==='siamese'?0x60463f:v.id==='bengal'?0x70443e:0x956964;else if(n.includes('mark_dark'))col=v.id==='siamese'?0x493832:v.id==='bengal'?0x452917:v.id==='tabby'?0x874725:v.id==='maine'?0x514036:0x697686;else if(n.includes('mark_warm'))col=v.id==='bengal'?0xc47d36:0xb86838;else if(n.includes('mark_cream'))col=v.id==='bengal'?0xf1ddb0:v.id==='siamese'?0xeee0c7:v.id==='maine'?0xd8c1a1:0xe4e8ec;"
+          if old not in s: raise SystemExit('Expected material color block not found')
+          s=s.replace(old,new,1)
+          s=s.replace("roughness:v.id==='bengal'?.52:.6","roughness:v.id==='bengal'?.50:.58",1)
+          app.write_text(s)
+
+          html=Path('app.html'); h=html.read_text()
+          if '4.0' not in h: raise SystemExit('Expected app.html 4.0')
+          h=h.replace('4.0','4.1').replace('UNIFIED CAT BUILD 4.1','CAT SILHOUETTE POLISH 4.1').replace('FINAL CAT BUILD 4.1','CAT SILHOUETTE POLISH 4.1')
+          html.write_text(h)
+          Path('version.json').write_text('{"version":"4.1"}\n')
+          PY
+          node --check app.js
+          grep -q "APP_VERSION='4.1'" app.js
+          grep -q '"version":"4.1"' version.json
+
+      - name: Commit cat polish 4.1
+        shell: bash
+        run: |
+          rm .github/workflows/cats-polish-41.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/cats app.js app.html version.json .github/workflows/cats-polish-41.yml
+          git commit -m 'Cats 4.1 refine silhouettes faces paws and breed colors'
+          git push
