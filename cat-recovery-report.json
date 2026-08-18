@@ -1,0 +1,74 @@
+{
+  "attempts": 19363,
+  "start_indices": [
+    0,
+    2,
+    4,
+    5,
+    6,
+    9,
+    12,
+    13
+  ],
+  "valid_count": 2,
+  "valid": [
+    {
+      "indices": [
+        6,
+        7,
+        8
+      ],
+      "blob_shas": [
+        "90fc200197d6821c872698ff674b048eeae347b6",
+        "b3c3b985ca85475ae9e247b4ef87957b815e68cf",
+        "e4740591351eb7a3c982955080a792ef4d9aae92"
+      ],
+      "base64_chars": 26080,
+      "xz_bytes": 19560,
+      "glb_bytes": 50056,
+      "sha256": "b1f4906d2193f0272a6ea64167562d5b92854a3f01fd4efec29507003bff277d",
+      "asset": {
+        "version": "2.0",
+        "generator": "https://github.com/mikedh/trimesh"
+      },
+      "names": [
+        "nodes:world",
+        "nodes:geometry_0",
+        "meshes:geometry_0"
+      ],
+      "scene": 0,
+      "mesh_count": 1,
+      "node_count": 2,
+      "material_count": 0
+    },
+    {
+      "indices": [
+        9,
+        10,
+        11
+      ],
+      "blob_shas": [
+        "3066a48dc55e4d953323f9b599690e3365d18fe4",
+        "56429f985be01a3ea2fa7e218188ff64efd2eba7",
+        "8f77d674da6b929297bb06d69fc3ec9c8bea1f77"
+      ],
+      "base64_chars": 31928,
+      "xz_bytes": 23944,
+      "glb_bytes": 63728,
+      "sha256": "a2888e46a93ff198564079ace67574182c65d69a1c0d4a686b48a83f5e7796e8",
+      "asset": {
+        "version": "2.0",
+        "generator": "https://github.com/mikedh/trimesh"
+      },
+      "names": [
+        "nodes:world",
+        "nodes:geometry_0",
+        "meshes:geometry_0"
+      ],
+      "scene": 0,
+      "mesh_count": 1,
+      "node_count": 2,
+      "material_count": 0
+    }
+  ]
+}
