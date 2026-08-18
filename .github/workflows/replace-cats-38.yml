@@ -1,4 +1,4 @@
-name: Replace cats 3.8 once
+name: Rebuild angular cats 3.8 once
 
 on:
   push:
@@ -14,176 +14,225 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download CC0 Quaternius cat and build breed variants
+      - name: Generate angular cat meshes
         shell: bash
         run: |
-          set -euo pipefail
-          rm -rf /tmp/qcat && mkdir -p /tmp/qcat/src
-          curl -L --fail --retry 3 --retry-delay 2 \
-            'https://opengameart.org/sites/default/files/Animal%20Pack%20Vol.2%20by%20%40Quaternius.zip' \
-            -o /tmp/qcat/animals.zip
-          unzip -q /tmp/qcat/animals.zip -d /tmp/qcat/src
-          find /tmp/qcat/src -type f | sort | sed -n '1,160p'
-
           python - <<'PY'
           from pathlib import Path
-          import math, re
+          import math
 
-          root=Path('/tmp/qcat/src')
-          candidates=[p for p in root.rglob('*.obj') if 'cat' in p.name.lower() or 'cat' in str(p.parent).lower()]
-          if not candidates:
-              raise SystemExit('No Cat OBJ found in Quaternius pack')
-          src=sorted(candidates, key=lambda p:(len(str(p)),str(p)))[0]
-          print('Using source cat:',src)
-          raw=src.read_text(errors='ignore').splitlines()
-          verts=[]
-          for line in raw:
-              if line.startswith('v '):
-                  q=line.split()
-                  verts.append((float(q[1]),float(q[2]),float(q[3])))
-          if not verts:
-              raise SystemExit('Cat OBJ has no vertices')
-          xs=[v[0] for v in verts];ys=[v[1] for v in verts];zs=[v[2] for v in verts]
-          mn=[min(xs),min(ys),min(zs)];mx=[max(xs),max(ys),max(zs)]
-          span=[mx[i]-mn[i] for i in range(3)];center=[(mn[i]+mx[i])/2 for i in range(3)]
-          # Blender OBJ export is normally Y-up. Determine horizontal length axis from X/Z spans.
-          length_axis=0 if span[0]>=span[2] else 2
-          width_axis=2 if length_axis==0 else 0
-          print('bbox',mn,mx,'span',span,'length_axis',length_axis,'width_axis',width_axis)
+          OUT=Path('assets/cats'); OUT.mkdir(parents=True,exist_ok=True)
 
-          breeds={
-            'BritishShorthair.obj':dict(width=.94,length=.96,height=.99,head=1.04,upper=.98),
-            'SiameseCat.obj':dict(width=.76,length=1.07,height=1.08,head=.88,upper=.90),
-            'OrangeTabby.obj':dict(width=.86,length=1.03,height=1.04,head=.96,upper=.95),
-            'MaineCoon.obj':dict(width=.88,length=1.12,height=1.08,head=1.00,upper=.98),
-            'BengalCat.obj':dict(width=.74,length=1.14,height=1.10,head=.90,upper=.91),
-          }
-          outdir=Path('assets/cats');outdir.mkdir(parents=True,exist_ok=True)
+          def norm(v):
+              l=math.sqrt(sum(x*x for x in v)) or 1
+              return tuple(x/l for x in v)
+          def cross(a,b): return (a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0])
+          def sub(a,b): return tuple(a[i]-b[i] for i in range(3))
+          def add(a,b): return tuple(a[i]+b[i] for i in range(3))
+          def mul(a,s): return tuple(x*s for x in a)
 
-          def transform(v,p):
-              a=list(v)
-              # Centered global breed proportions.
-              a[width_axis]=center[width_axis]+(a[width_axis]-center[width_axis])*p['width']
-              a[length_axis]=center[length_axis]+(a[length_axis]-center[length_axis])*p['length']
-              a[1]=mn[1]+(a[1]-mn[1])*p['height']
-              yn=(v[1]-mn[1])/max(span[1],1e-9)
-              # Refine the upper/head region without generating new primitive geometry.
-              if yn>.72:
-                  t=min(1,(yn-.72)/.28)
-                  hs=1+(p['head']-1)*t
-                  a[width_axis]=center[width_axis]+(a[width_axis]-center[width_axis])*hs
-                  # slightly taper upper chest/neck for elegant silhouette
-                  us=1+(p['upper']-1)*(1-t)
-                  a[width_axis]=center[width_axis]+(a[width_axis]-center[width_axis])*us
-              # subtly lengthen legs on slender breeds by stretching lower quarter vertically
-              if yn<.28 and p['height']>1.03:
-                  low=(.28-yn)/.28
-                  a[1]-=span[1]*(p['height']-1)*.05*low
-              return a
+          class Obj:
+              def __init__(self): self.v=[]; self.parts=[]
+              def part(self,name):
+                  p={'name':name,'faces':[]}; self.parts.append(p); return p
+              def verts(self,pts):
+                  ids=[]
+                  for p in pts: self.v.append(p); ids.append(len(self.v))
+                  return ids
+              def tri(self,p,a,b,c): p['faces'].append((a,b,c))
+              def quad(self,p,a,b,c,d): self.tri(p,a,b,c); self.tri(p,a,c,d)
+              def loft_z(self,name,sections,sides=8):
+                  p=self.part(name); rings=[]
+                  for z,cy,rx,ry in sections:
+                      pts=[]
+                      for i in range(sides):
+                          a=2*math.pi*i/sides
+                          pts.append((rx*math.cos(a),cy+ry*math.sin(a),z))
+                      rings.append(self.verts(pts))
+                  for r in range(len(rings)-1):
+                      A,B=rings[r],rings[r+1]
+                      for i in range(sides): self.quad(p,A[i],A[(i+1)%sides],B[(i+1)%sides],B[i])
+                  # caps
+                  c0=self.verts([(0,sections[0][1],sections[0][0])])[0]
+                  c1=self.verts([(0,sections[-1][1],sections[-1][0])])[0]
+                  for i in range(sides):
+                      self.tri(p,c0,rings[0][(i+1)%sides],rings[0][i])
+                      self.tri(p,c1,rings[-1][i],rings[-1][(i+1)%sides])
+              def tube(self,name,points,radii,sides=6):
+                  p=self.part(name); rings=[]
+                  for j,c in enumerate(points):
+                      if j==0:t=sub(points[1],points[0])
+                      elif j==len(points)-1:t=sub(points[-1],points[-2])
+                      else:t=sub(points[j+1],points[j-1])
+                      t=norm(t); ref=(0,1,0) if abs(t[1])<.88 else (1,0,0)
+                      n1=norm(cross(t,ref)); n2=norm(cross(t,n1)); r=radii[j]
+                      pts=[add(c,add(mul(n1,math.cos(2*math.pi*i/sides)*r),mul(n2,math.sin(2*math.pi*i/sides)*r))) for i in range(sides)]
+                      rings.append(self.verts(pts))
+                  for r in range(len(rings)-1):
+                      A,B=rings[r],rings[r+1]
+                      for i in range(sides): self.quad(p,A[i],A[(i+1)%sides],B[(i+1)%sides],B[i])
+                  c0=self.verts([points[0]])[0]; c1=self.verts([points[-1]])[0]
+                  for i in range(sides):
+                      self.tri(p,c0,rings[0][(i+1)%sides],rings[0][i]); self.tri(p,c1,rings[-1][i],rings[-1][(i+1)%sides])
+              def wedge_ear(self,name,cx,wide=.18,tall=.40,front=.90,back=.68,basey=1.28):
+                  p=self.part(name)
+                  pts=[(cx-wide,basey,front),(cx+wide,basey,front),(cx+wide*.82,basey+.04,back),(cx-wide*.82,basey+.04,back),(cx,basey+tall,(front+back)*.5)]
+                  a,b,c,d,e=self.verts(pts)
+                  self.quad(p,a,b,c,d); self.tri(p,a,e,b); self.tri(p,b,e,c); self.tri(p,c,e,d); self.tri(p,d,e,a)
+              def box(self,name,cx,cy,cz,sx,sy,sz,bevel=0):
+                  p=self.part(name); x0,x1=cx-sx,cx+sx; y0,y1=cy-sy,cy+sy; z0,z1=cz-sz,cz+sz
+                  ids=self.verts([(x0,y0,z0),(x1,y0,z0),(x1,y1,z0),(x0,y1,z0),(x0,y0,z1),(x1,y0,z1),(x1,y1,z1),(x0,y1,z1)])
+                  a,b,c,d,e,f,g,h=ids
+                  self.quad(p,a,b,c,d); self.quad(p,e,h,g,f); self.quad(p,a,e,f,b); self.quad(p,d,c,g,h); self.quad(p,b,f,g,c); self.quad(p,a,d,h,e)
+              def plate_z(self,name,cx,cy,z,rx,ry,depth=.012,sides=6):
+                  p=self.part(name); front=[]; back=[]
+                  for i in range(sides):
+                      a=2*math.pi*i/sides
+                      front.append((cx+rx*math.cos(a),cy+ry*math.sin(a),z+depth)); back.append((cx+rx*math.cos(a),cy+ry*math.sin(a),z-depth))
+                  F=self.verts(front); B=self.verts(back)
+                  for i in range(1,sides-1): self.tri(p,F[0],F[i],F[i+1]); self.tri(p,B[0],B[i+1],B[i])
+                  for i in range(sides): self.quad(p,F[i],B[i],B[(i+1)%sides],F[(i+1)%sides])
+              def plate_x(self,name,x,cy,cz,ry,rz,depth=.012,sides=6):
+                  p=self.part(name); A=[];B=[]
+                  for i in range(sides):
+                      a=2*math.pi*i/sides
+                      y=cy+ry*math.cos(a); z=cz+rz*math.sin(a)
+                      A.append((x+depth,y,z));B.append((x-depth,y,z))
+                  F=self.verts(A); R=self.verts(B)
+                  for i in range(1,sides-1): self.tri(p,F[0],F[i],F[i+1]); self.tri(p,R[0],R[i+1],R[i])
+                  for i in range(sides): self.quad(p,F[i],R[i],R[(i+1)%sides],F[(i+1)%sides])
+              def text(self):
+                  out=['# 3D Printer Online angular low-poly cat collectible']
+                  for x,y,z in self.v: out.append(f'v {x:.6f} {y:.6f} {z:.6f}')
+                  for p in self.parts:
+                      out.append('o '+p['name']); out.append('g '+p['name'])
+                      for f in p['faces']: out.append('f '+' '.join(map(str,f)))
+                  return '\n'.join(out)+'\n'
 
-          for filename,p in breeds.items():
-              out=[];vi=0
-              out.append('# Quaternius CC0 cat mesh, breed-deformed for 3D Printer Online')
-              out.append('o cat_body')
-              for line in raw:
-                  if line.startswith('v '):
-                      a=transform(verts[vi],p);vi+=1
-                      out.append(f'v {a[0]:.7f} {a[1]:.7f} {a[2]:.7f}')
-                  elif line.startswith('mtllib '):
-                      continue
-                  elif line.startswith('usemtl '):
-                      continue
-                  elif line.startswith('o ') or line.startswith('g '):
-                      # preserve geometry but keep readable object names
-                      out.append('g cat_mesh')
-                  else:
-                      out.append(line)
-              (outdir/filename).write_text('\n'.join(out)+'\n')
-              print(filename,'written')
+          def build(name,kind):
+              o=Obj()
+              P={
+                'british':dict(bodyW=.37,bodyL=.73,bodyY=.76,bodyH=.36,headW=.31,headH=.30,leg=.48,ear=.34,tail=.075),
+                'siamese':dict(bodyW=.25,bodyL=.82,bodyY=.79,bodyH=.30,headW=.25,headH=.25,leg=.58,ear=.45,tail=.045),
+                'tabby':dict(bodyW=.31,bodyL=.78,bodyY=.78,bodyH=.33,headW=.28,headH=.27,leg=.52,ear=.38,tail=.055),
+                'maine':dict(bodyW=.34,bodyL=.88,bodyY=.81,bodyH=.35,headW=.32,headH=.30,leg=.55,ear=.44,tail=.090),
+                'bengal':dict(bodyW=.26,bodyL=.86,bodyY=.80,bodyH=.30,headW=.25,headH=.25,leg=.58,ear=.39,tail=.050),
+              }[kind]
+              w,l,by,bh=P['bodyW'],P['bodyL'],P['bodyY'],P['bodyH']
+              # horizontal feline torso — angular 8-sided loft, not a sphere
+              o.loft_z('body',[
+                (-l,by-.01,w*.78,bh*.78),(-l*.55,by,w,bh),(-.05,by+.025,w*.96,bh*.94),(l*.45,by+.04,w*.82,bh*.90),(l*.72,by+.07,w*.66,bh*.76)
+              ],8)
+              # neck and head are separate angular lofts but deeply overlap, producing one readable silhouette
+              hw,hh=P['headW'],P['headH']
+              o.loft_z('neck',[(l*.48,by+.12,w*.54,bh*.62),(l*.76,1.03,hw*.72,hh*.72),(l*.88,1.13,hw*.78,hh*.82)],8)
+              o.loft_z('head',[(l*.70,1.16,hw*.84,hh*.82),(l*.88,1.22,hw,hh),(l+0.20,1.20,hw*.88,hh*.86),(l+0.38,1.13,hw*.57,hh*.55)],8)
+              # angular muzzle/chin
+              o.loft_z('muzzle',[(l+0.31,1.10,hw*.56,hh*.48),(l+0.47,1.08,hw*.42,hh*.36)],6)
+              # ears embedded well into the head
+              ex=hw*.55
+              o.wedge_ear('ear_left',-ex,hw*.42,P['ear'],l+0.17,l-.03,1.35)
+              o.wedge_ear('ear_right',ex,hw*.42,P['ear'],l+0.17,l-.03,1.35)
+              # legs: long tapered polygon tubes + angular paws
+              leg=P['leg']; bottom=.12
+              for side in (-1,1):
+                x=side*w*.52
+                for z,tag in ((l*.43,'front'),(-l*.48,'rear')):
+                  hip=(x,by-.15,z); knee=(x*(1.03 if tag=='rear' else .98),bottom+leg*.46,z+(-.05 if tag=='rear' else .03)); ankle=(x,bottom+.07,z+(.03 if tag=='front' else -.03))
+                  rad=[w*.15,w*.115,w*.095]
+                  o.tube(f'leg_{tag}_{"L" if side<0 else "R"}',[hip,knee,ankle],rad,5)
+                  o.box(f'paw_{tag}_{"L" if side<0 else "R"}',x,bottom*.52,z+.055,w*.15,.055,.115)
+              # tail: single connected faceted tube
+              tr=P['tail'];
+              if kind=='british':
+                pts=[(-w*.32,by,-l*.72),(-w*.55,by+.18,-l-.10),(-w*.52,by+.39,-l-.28),(-w*.28,by+.48,-l-.36)]
+              elif kind=='maine':
+                pts=[(-w*.30,by,-l*.72),(-w*.58,by+.18,-l-.14),(-w*.65,by+.44,-l-.38),(-w*.38,by+.68,-l-.50),(-.02,by+.77,-l-.43)]
+              else:
+                pts=[(-w*.28,by,-l*.72),(-w*.48,by+.16,-l-.18),(-w*.50,by+.38,-l-.38),(-w*.30,by+.58,-l-.52),(0,by+.66,-l-.48)]
+              o.tube('tail',pts,[tr,tr*.92,tr*.78,tr*.62]+([tr*.48] if len(pts)==5 else []),6)
+              # eyes + nose as tiny angular plates
+              facez=l+.485
+              eye_col='detail_eye'
+              o.plate_z('detail_eye_left',-hw*.34,1.24,facez,hw*.10,hh*.07,.008,5)
+              o.plate_z('detail_eye_right',hw*.34,1.24,facez,hw*.10,hh*.07,.008,5)
+              o.plate_z('detail_nose',0,1.075,facez+.012,hw*.11,hh*.07,.009,4)
 
-          Path('assets/cats/QUATERNIUS_SOURCE.txt').write_text(
-              'Base cat mesh: Quaternius, Animated Animales Low Poly / Animal Pack Vol.2\n'
-              'Source: https://opengameart.org/content/animated-animales-low-poly\n'
-              'License: CC0 1.0 / public domain dedication\n'
-              'Breed variants in this project are geometry deformations of the authored base cat mesh.\n'
-          )
+              if kind=='siamese':
+                o.plate_z('mark_dark_mask',0,1.16,facez-.005,hw*.62,hh*.50,.013,6)
+                for side in (-1,1):
+                  x=side*w*.52
+                  for z,tag in ((l*.43,'f'),(-l*.48,'r')): o.box(f'mark_dark_paw_{tag}_{side}',x,.09,z+.055,w*.155,.06,.12)
+              elif kind=='tabby':
+                for side in (-1,1):
+                  x=side*(w+.006)
+                  for j,(zv,yv,rz) in enumerate([(-.42,.82,.10),(-.16,.88,.09),(.10,.90,.08),(.35,.94,.07)]):
+                    o.plate_x(f'mark_dark_stripe_{side}_{j}',x,yv,zv,w*.035,rz,.008,4)
+                o.plate_z('mark_dark_forehead',0,1.36,facez-.005,hw*.10,hh*.14,.01,4)
+              elif kind=='maine':
+                o.plate_z('mark_cream_chest',0,.83,l*.79,hw*.65,bh*.34,.012,6)
+                for side in (-1,1):
+                  o.plate_x(f'mark_dark_flank_{side}',side*(w+.006),.88,-.08,bh*.20,.16,.008,5)
+              elif kind=='bengal':
+                # true spotted/rosetted sides, both flanks
+                spots=[(-.52,.80,.12),(-.28,.91,.11),(-.04,.78,.10),(.20,.91,.11),(.43,.80,.10),(-.38,1.01,.09),(-.10,1.04,.10),(.18,1.02,.09),(.43,1.00,.085)]
+                for side in (-1,1):
+                  x=side*(w+.008)
+                  for j,(zv,yv,r) in enumerate(spots):
+                    o.plate_x(f'mark_dark_spot_{side}_{j}',x,yv,zv,r*.70,r,.010,6)
+                    if j%2==0:o.plate_x(f'mark_warm_spot_{side}_{j}',side*(w+.020),yv,zv,r*.32,r*.47,.010,6)
+                o.plate_z('mark_cream_chest',0,.86,l*.78,hw*.55,bh*.24,.012,6)
+              elif kind=='british':
+                o.plate_z('mark_cream_chest',0,.84,l*.76,hw*.48,bh*.20,.010,6)
+
+              (OUT/name).write_text(o.text())
+
+          build('BritishShorthair.obj','british')
+          build('SiameseCat.obj','siamese')
+          build('OrangeTabby.obj','tabby')
+          build('MaineCoon.obj','maine')
+          build('BengalCat.obj','bengal')
+          Path('assets/cats/README.txt').write_text('3.8 angular low-poly cat meshes. Custom project geometry; no sphere/ellipsoid body primitives.\n')
           PY
 
-      - name: Update cat coloring and version
+      - name: Patch app for 3.8 cats
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           p=Path('app.js');s=p.read_text()
-          s=s.replace("const APP_VERSION='3.7';","const APP_VERSION='3.8';")
-          # New authored meshes already have breed proportions; only light final shaping here.
-          changes={
-            "shape:[.88,1.02,.82]":"shape:[.98,1.00,.96]",
-            "shape:[.78,1.06,.74]":"shape:[.97,1.01,.95]",
-            "shape:[.84,1.03,.78]":"shape:[.98,1.00,.96]",
-            "shape:[.86,1.05,.80]":"shape:[.98,1.00,.96]",
-            "shape:[.76,1.08,.70]":"shape:[.97,1.01,.95]",
+          if "const APP_VERSION='3.7';" not in s: raise SystemExit('expected app 3.7')
+          s=s.replace("const APP_VERSION='3.7';","const APP_VERSION='3.8';",1)
+          repl={
+            "shape:[.88,1.02,.82]":"shape:[1,1,1]",
+            "shape:[.78,1.06,.74]":"shape:[1,1,1]",
+            "shape:[.84,1.03,.78]":"shape:[1,1,1]",
+            "shape:[.86,1.05,.80]":"shape:[1,1,1]",
+            "shape:[.76,1.08,.70]":"shape:[1,1,1]",
           }
-          for a,b in changes.items():
-              if a not in s: raise SystemExit('missing shape '+a)
+          for a,b in repl.items():
+              if a not in s: raise SystemExit('missing '+a)
               s=s.replace(a,b,1)
-
-          # Re-enable breed markings, now only as accents on a real authored cat silhouette.
-          old="raw.updateMatrixWorld(true);modelHeight=new THREE.Box3().setFromObject(raw).getSize(new THREE.Vector3()).y;return raw}"
-          new="if(v.id==='british'||v.id==='siamese'||v.id==='tabby'||v.id==='maine'||v.id==='bengal')addBreedDetails(raw,{...v,breed:v.id});raw.updateMatrixWorld(true);modelHeight=new THREE.Box3().setFromObject(raw).getSize(new THREE.Vector3()).y;return raw}"
-          if old not in s: raise SystemExit('prepareModel tail not found')
+          old="else if(n.includes('mark_cream'))col=v.id==='bengal'?0xf2deb5:v.id==='siamese'?0xead8bb:v.id==='maine'?0xdcc5a4:0xe9dcc6;"
+          new="else if(n.includes('mark_warm'))col=v.id==='bengal'?0xc9823f:0xb86838;else if(n.includes('mark_cream'))col=v.id==='bengal'?0xf0d7a5:v.id==='siamese'?0xead8bb:v.id==='maine'?0xdcc5a4:0xe3e8ee;"
+          if old not in s: raise SystemExit('material color block not found')
           s=s.replace(old,new,1)
-
-          # Tone breed details down: colors/patterns, not ball-based silhouette replacement.
-          start=s.index('function addBreedDetails(raw,v){')
-          end=s.index('function addDuckDetails(raw,v){',start)
-          func=r'''function addBreedDetails(raw,v){
- const b=new THREE.Box3().setFromObject(raw),sz=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());
- const front=b.max.z+sz.z*.008,back=b.min.z-sz.z*.008,headY=b.min.y+sz.y*.78,chestY=b.min.y+sz.y*.48;
- const dark=detailMaterial(v.id==='siamese'?0x493832:v.id==='bengal'?0x4a2b18:v.id==='tabby'?0x95532f:v.id==='maine'?0x5b4438:0x718095,.58);
- const cream=detailMaterial(v.id==='bengal'?0xf1dfb8:v.id==='siamese'?0xead8ba:v.id==='maine'?0xdcc5a4:0xdce3ea,.68);
- const addSphere=(mat,x,y,z,sx,sy,szc)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.1,12,8),mat);m.position.set(x,y,z);m.scale.set(sx,sy,szc);m.castShadow=true;raw.add(m);return m};
- const addBox=(mat,x,y,z,sx,sy,szc,rz=0)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.1),mat);m.position.set(x,y,z);m.scale.set(sx,sy,szc);m.rotation.z=rz;m.castShadow=true;raw.add(m);return m};
- if(v.id==='british'){
-   addSphere(cream,c.x,chestY,front,sz.x*1.0,sz.y*.34,sz.z*.12);
- }
- if(v.id==='siamese'){
-   addSphere(dark,c.x,headY,front,sz.x*1.65,sz.y*.72,sz.z*.18);
-   for(const x of [-.19,.19])addSphere(dark,c.x+sz.x*x,b.min.y+sz.y*.09,c.z+sz.z*.16,sz.x*.54,sz.y*.22,sz.z*.45);
- }
- if(v.id==='tabby'){
-   for(let i=-2;i<=2;i++){const x=c.x+sz.x*i*.095;addBox(dark,x,chestY+sz.y*(.11-abs(i)*.018),front,sz.x*.44,sz.y*.085,sz.z*.10,i*.09);addBox(dark,x,chestY+sz.y*(.11-abs(i)*.018),back,sz.x*.44,sz.y*.085,sz.z*.10,-i*.09)}
-   addBox(dark,c.x,headY+sz.y*.10,front,sz.x*.22,sz.y*.26,sz.z*.08,0);
- }
- if(v.id==='maine'){
-   addSphere(cream,c.x,chestY+sz.y*.04,front,sz.x*1.25,sz.y*.72,sz.z*.16);
-   addBox(dark,c.x-sz.x*.10,chestY+sz.y*.15,front,sz.x*.34,sz.y*.10,sz.z*.08,.16);
-   addBox(dark,c.x+sz.x*.10,chestY+sz.y*.12,front,sz.x*.34,sz.y*.10,sz.z*.08,-.16);
- }
- if(v.id==='bengal'){
-   const inner=detailMaterial(0xdcae69,.62);
-   const rosette=(px,py,side=1,sc=1)=>{const z=side>0?front:back;addSphere(dark,c.x+sz.x*px,b.min.y+sz.y*py,z,sz.x*.72*sc,sz.y*.24*sc,sz.z*.10);addSphere(inner,c.x+sz.x*px,b.min.y+sz.y*py,z+(side>0?sz.z*.008:-sz.z*.008),sz.x*.34*sc,sz.y*.11*sc,sz.z*.07)};
-   const pts=[[-.28,.48,1,1],[-.08,.52,1,.92],[.13,.50,1,.86],[.30,.58,1,.92],[-.22,.64,1,.82],[.02,.68,1,.96],[.24,.72,1,.78],[-.27,.80,1,.72],[-.05,.84,1,.72],[.18,.86,1,.66],[-.28,.48,-1,.9],[-.05,.54,-1,1],[.17,.53,-1,.84],[.30,.62,-1,.88],[-.18,.68,-1,.8],[.05,.73,-1,.9],[.23,.79,-1,.72],[-.08,.84,-1,.68]];
-   pts.forEach(q=>rosette(q[0],q[1],q[2],q[3]));
-   addSphere(cream,c.x,chestY+sz.y*.02,front,sz.x*.86,sz.y*.38,sz.z*.12);
- }
-}
-'''.replace('abs(i)','Math.abs(i)')
-          s=s[:start]+func+s[end:]
           p.write_text(s)
 
-          h=Path('app.html').read_text().replace('3.7','3.8').replace('CAT POLISH BUILD 3.8','AUTHORED CAT MESH BUILD 3.8')
+          h=Path('app.html').read_text()
+          if '3.7' not in h: raise SystemExit('expected html 3.7')
+          h=h.replace('3.7','3.8').replace('CAT POLISH BUILD 3.8','ANGULAR CAT BUILD 3.8')
           Path('app.html').write_text(h)
           Path('version.json').write_text('{"version":"3.8"}\n')
           PY
           node --check app.js
 
-      - name: Commit authored cats 3.8
+      - name: Commit angular cats 3.8
         shell: bash
         run: |
           rm .github/workflows/replace-cats-38.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add assets/cats app.js app.html version.json .github/workflows/replace-cats-38.yml
-          git commit -m 'Cats 3.8 authored Quaternius mesh rebuild'
+          git commit -m 'Cats 3.8 angular low-poly mesh rebuild'
           git push
