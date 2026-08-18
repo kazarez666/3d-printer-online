@@ -61,9 +61,6 @@ jobs:
               if not body_ids:
                   raise SystemExit(f'{fname}: cat_unified_body not found')
 
-              # Detect the four paw/leg centres from the actual fused mesh.
-              # Low vertices are the feet; grouping by left/right + front/rear
-              # makes this work across all five breed proportions.
               groups={(sx,sz):[] for sx in (-1,1) for sz in (-1,1)}
               for i in body_ids:
                   x,y,z=verts[i]
@@ -77,9 +74,6 @@ jobs:
                       raise SystemExit(f'{fname}: could not detect paw {key}, got {len(pts)} verts')
                   centers[key]=(median([p[0] for p in pts]), median([p[2] for p in pts]))
 
-              # Breed-specific subtlety. All changes are deliberately small:
-              # thinner ankles, smaller oval paws, a broader upper transition
-              # so the leg reads as growing from the body rather than glued on.
               breed=fname.lower()
               if 'siamese' in breed or 'bengal' in breed:
                   ankle=0.78; paw_x=0.67; paw_z=0.82; influence=0.205
@@ -103,29 +97,21 @@ jobs:
                       continue
 
                   if y < 0.14:
-                      # Small flattened oval paw, extending very slightly away
-                      # from the body to create a readable feline toe shape.
                       xs=paw_x; zs=paw_z
                       y0=0.065
                       y=y0+(y-y0)*0.76
                       z += (0.012 if cz>0 else -0.010)
                   elif y < 0.46:
-                      # Slim ankle/shin.
                       t=(y-0.14)/0.32
                       xs=ankle+(0.88-ankle)*t
                       zs=(ankle+0.04)+(0.91-(ankle+0.04))*t
                   else:
-                      # Smoothly flare into shoulder/hip to remove the
-                      # detached-cylinder look at the body junction.
                       t=min(1.0,(y-0.46)/0.42)
                       xs=0.88+(1.06-0.88)*t
                       zs=0.91+(1.05-0.91)*t
 
                   x=cx+dx*xs
                   z=cz+dz*zs
-
-                  # Natural stance: front paws sit a hair forward, rear paws
-                  # a hair back. This also separates the silhouette cleanly.
                   stance=max(0.0,1.0-y/0.88)
                   z += (0.010 if cz>0 else -0.013)*stance
                   verts[i]=[x,y,z]
@@ -172,3 +158,5 @@ jobs:
           git add assets/cats app.js app.html version.json .github/workflows/cats-paws-42.yml
           git commit -m 'Cats 4.2 refine fused legs and paws'
           git push
+
+# retrigger
