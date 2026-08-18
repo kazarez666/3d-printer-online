@@ -1,0 +1,174 @@
+name: Cat paw polish 4.2 once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cats-paws-42.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refine unified cat legs and paws
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from statistics import median
+          import math
+
+          ROOT=Path('assets/cats')
+          FILES=[
+            'BritishShorthair.obj',
+            'SiameseCat.obj',
+            'OrangeTabby.obj',
+            'MaineCoon.obj',
+            'BengalCat.obj',
+          ]
+
+          def face_indices(line,nv):
+              out=[]
+              for tok in line.split()[1:]:
+                  i=int(tok.split('/')[0])
+                  if i<0: i=nv+1+i
+                  out.append(i-1)
+              return out
+
+          for fname in FILES:
+              path=ROOT/fname
+              lines=path.read_text().splitlines()
+              verts=[]
+              for line in lines:
+                  if line.startswith('v '):
+                      p=line.split(); verts.append([float(p[1]),float(p[2]),float(p[3])])
+
+              current=''
+              body_ids=set()
+              for line in lines:
+                  if line.startswith('o '):
+                      current=line[2:].strip()
+                  elif line.startswith('f ') and current=='cat_unified_body':
+                      body_ids.update(face_indices(line,len(verts)))
+              if not body_ids:
+                  raise SystemExit(f'{fname}: cat_unified_body not found')
+
+              # Detect the four paw/leg centres from the actual fused mesh.
+              # Low vertices are the feet; grouping by left/right + front/rear
+              # makes this work across all five breed proportions.
+              groups={(sx,sz):[] for sx in (-1,1) for sz in (-1,1)}
+              for i in body_ids:
+                  x,y,z=verts[i]
+                  if y < 0.24 and abs(x) > 0.045:
+                      sx=-1 if x<0 else 1
+                      sz=-1 if z<0 else 1
+                      groups[(sx,sz)].append((x,y,z))
+              centers={}
+              for key,pts in groups.items():
+                  if len(pts)<3:
+                      raise SystemExit(f'{fname}: could not detect paw {key}, got {len(pts)} verts')
+                  centers[key]=(median([p[0] for p in pts]), median([p[2] for p in pts]))
+
+              # Breed-specific subtlety. All changes are deliberately small:
+              # thinner ankles, smaller oval paws, a broader upper transition
+              # so the leg reads as growing from the body rather than glued on.
+              breed=fname.lower()
+              if 'siamese' in breed or 'bengal' in breed:
+                  ankle=0.78; paw_x=0.67; paw_z=0.82; influence=0.205
+              elif 'maine' in breed:
+                  ankle=0.84; paw_x=0.74; paw_z=0.88; influence=0.235
+              elif 'british' in breed:
+                  ankle=0.84; paw_x=0.73; paw_z=0.87; influence=0.225
+              else:
+                  ankle=0.82; paw_x=0.71; paw_z=0.85; influence=0.215
+
+              changed=0
+              for i in body_ids:
+                  x,y,z=verts[i]
+                  if y >= 0.88:
+                      continue
+                  key=(-1 if x<0 else 1, -1 if z<0 else 1)
+                  cx,cz=centers[key]
+                  dx,dz=x-cx,z-cz
+                  d=math.hypot(dx,dz)
+                  if d > influence:
+                      continue
+
+                  if y < 0.14:
+                      # Small flattened oval paw, extending very slightly away
+                      # from the body to create a readable feline toe shape.
+                      xs=paw_x; zs=paw_z
+                      y0=0.065
+                      y=y0+(y-y0)*0.76
+                      z += (0.012 if cz>0 else -0.010)
+                  elif y < 0.46:
+                      # Slim ankle/shin.
+                      t=(y-0.14)/0.32
+                      xs=ankle+(0.88-ankle)*t
+                      zs=(ankle+0.04)+(0.91-(ankle+0.04))*t
+                  else:
+                      # Smoothly flare into shoulder/hip to remove the
+                      # detached-cylinder look at the body junction.
+                      t=min(1.0,(y-0.46)/0.42)
+                      xs=0.88+(1.06-0.88)*t
+                      zs=0.91+(1.05-0.91)*t
+
+                  x=cx+dx*xs
+                  z=cz+dz*zs
+
+                  # Natural stance: front paws sit a hair forward, rear paws
+                  # a hair back. This also separates the silhouette cleanly.
+                  stance=max(0.0,1.0-y/0.88)
+                  z += (0.010 if cz>0 else -0.013)*stance
+                  verts[i]=[x,y,z]
+                  changed+=1
+
+              vi=0
+              out=[]
+              for line in lines:
+                  if line.startswith('v '):
+                      x,y,z=verts[vi]; vi+=1
+                      out.append(f'v {x:.6f} {y:.6f} {z:.6f}')
+                  else:
+                      out.append(line)
+              path.write_text('\n'.join(out)+'\n')
+              print(fname, 'paw centers=', centers, 'changed=', changed)
+
+          app=Path('app.js')
+          s=app.read_text()
+          if "const APP_VERSION='4.1';" not in s:
+              raise SystemExit('Expected app.js 4.1')
+          s=s.replace("const APP_VERSION='4.1';","const APP_VERSION='4.2';",1)
+          app.write_text(s)
+
+          html=Path('app.html')
+          h=html.read_text()
+          if '4.1' not in h:
+              raise SystemExit('Expected app.html 4.1')
+          h=h.replace('4.1','4.2').replace('FINAL CAT POLISH 4.2','PAW POLISH BUILD 4.2')
+          html.write_text(h)
+          Path('version.json').write_text('{"version":"4.2"}\n')
+          PY
+
+          node --check app.js
+          grep -q "APP_VERSION='4.2'" app.js
+          grep -q '"version":"4.2"' version.json
+          grep -q 'PAW POLISH BUILD 4.2' app.html
+
+      - name: Commit paw polish 4.2
+        shell: bash
+        run: |
+          rm .github/workflows/cats-paws-42.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/cats app.js app.html version.json .github/workflows/cats-paws-42.yml
+          git commit -m 'Cats 4.2 refine fused legs and paws'
+          git push
