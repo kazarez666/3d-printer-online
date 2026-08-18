@@ -1,4 +1,4 @@
-name: Recover user cat GLBs 5.0
+name: Recover scrambled user cat GLBs 5.0
 
 on:
   push:
@@ -14,14 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Recover every valid GLB from uploaded blob chunks
+      - name: Recover GLBs by XZ-valid permutation search
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/catrecover
-          mkdir -p /tmp/catrecover/valid
+          rm -rf /tmp/catperm
+          mkdir -p /tmp/catperm/valid
           CANDIDATES=(
             b21e9405e8935998a67ccb745e64abdecfb11096
             cb1e04bbb87344aab90d77ba9de9c4f773e06ebb
@@ -40,102 +40,114 @@ jobs:
             fcbcbdb11cafdc9b02912cecd7e04cb0b12a1ac6
             b6525d7347ea64babe84ffef52a5dd0518b42784
           )
-          : > /tmp/catrecover/list.txt
+          : > /tmp/catperm/list.txt
           for sha in "${CANDIDATES[@]}"; do
             curl -fsSL \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/$sha" \
-              | jq -r '.content' | tr -d '\n' | base64 -d > "/tmp/catrecover/$sha.txt"
-            echo "$sha" >> /tmp/catrecover/list.txt
+              | jq -r '.content' | tr -d '\n' | base64 -d > "/tmp/catperm/$sha.txt"
+            echo "$sha" >> /tmp/catperm/list.txt
           done
 
           python - <<'PY'
           from pathlib import Path
-          import base64, lzma, itertools, hashlib, json, struct
+          import base64,lzma,hashlib,json,struct
 
-          root=Path('/tmp/catrecover')
+          root=Path('/tmp/catperm')
           shas=root.joinpath('list.txt').read_text().splitlines()
           parts=[root.joinpath(s+'.txt').read_bytes() for s in shas]
+          parts=[b''.join(p.split()) for p in parts]
           starts=[i for i,p in enumerate(parts) if p.startswith(b'/Td6WFo')]
+          continuations=[i for i in range(len(parts)) if i not in starts]
           seen={}
-          attempts=0
+          tested=0
+          prefix_ok=0
+
+          def decode_prefix(indices):
+              nonlocal_dummy=None
+              txt=b''.join(parts[i] for i in indices)
+              usable=(len(txt)//4)*4
+              if usable<8:return None,None,False
+              try:
+                  packed=base64.b64decode(txt[:usable],validate=True)
+              except Exception:
+                  return None,None,False
+              if not packed.startswith(b'\xfd7zXZ\x00'):
+                  return None,None,False
+              d=lzma.LZMADecompressor(format=lzma.FORMAT_XZ)
+              try:
+                  raw=d.decompress(packed)
+              except lzma.LZMAError:
+                  return None,None,False
+              return raw,d,True
 
           def parse_glb(raw):
-              if len(raw)<20 or raw[:4]!=b'glTF': return None
-              magic,version,total=struct.unpack_from('<4sII',raw,0)
-              if version!=2 or total!=len(raw): return None
+              if len(raw)<20 or raw[:4]!=b'glTF':return None
+              _,version,total=struct.unpack_from('<4sII',raw,0)
+              if version!=2 or total!=len(raw):return None
               clen,ctype=struct.unpack_from('<II',raw,12)
-              if ctype!=0x4E4F534A or 20+clen>len(raw): return None
-              try:
-                  doc=json.loads(raw[20:20+clen].decode('utf-8').rstrip(' \t\r\n\0'))
-              except Exception:
-                  return None
-              return doc
+              if ctype!=0x4E4F534A:return None
+              try:return json.loads(raw[20:20+clen].decode().rstrip(' \t\r\n\0'))
+              except Exception:return None
 
-          for start in starts:
-              later=list(range(start+1,len(parts)))
-              # Up to 7 continuation chunks.  All earlier uploads were split into small pieces,
-              # and this covers interleaved upload order while keeping runtime bounded.
-              for tails_n in range(0,min(7,len(later))+1):
-                  for tail in itertools.combinations(later,tails_n):
-                      idx=(start,)+tail
-                      compact=b''.join(b''.join(parts[k].split()) for k in idx)
-                      if len(compact)>180000 or len(compact)%4==1:
-                          continue
-                      attempts+=1
-                      try:
-                          packed=base64.b64decode(compact,validate=True)
-                          if not packed.startswith(b'\xfd7zXZ\x00'):
-                              continue
-                          raw=lzma.decompress(packed)
-                      except Exception:
-                          continue
-                      doc=parse_glb(raw)
-                      if doc is None:
-                          continue
-                      digest=hashlib.sha256(raw).hexdigest()
-                      if digest in seen:
-                          continue
-                      names=[]
-                      for key in ('scenes','nodes','meshes','materials'):
-                          for item in doc.get(key,[]) or []:
-                              n=item.get('name') if isinstance(item,dict) else None
-                              if n: names.append(f'{key}:{n}')
-                      asset=doc.get('asset',{})
-                      summary={
-                          'indices':idx,
-                          'blob_shas':[shas[k] for k in idx],
-                          'base64_chars':len(compact),
-                          'xz_bytes':len(packed),
-                          'glb_bytes':len(raw),
-                          'sha256':digest,
-                          'asset':asset,
-                          'names':names[:40],
-                          'scene':doc.get('scene'),
-                          'mesh_count':len(doc.get('meshes',[]) or []),
-                          'node_count':len(doc.get('nodes',[]) or []),
-                          'material_count':len(doc.get('materials',[]) or []),
-                      }
-                      seen[digest]=summary
-                      (root/'valid'/f'{digest[:12]}.glb').write_bytes(raw)
+          # Correct continuations should keep the XZ decoder valid at every added chunk.
+          # DFS is heavily pruned by XZ integrity, so arbitrary prior upload ordering is okay.
+          def walk(seq,remaining,depth=0):
+              global tested,prefix_ok
+              tested+=1
+              raw,d,ok=decode_prefix(seq)
+              if not ok:return
+              prefix_ok+=1
+              if d.eof:
+                  # Decode the COMPLETE base64 text (including any final non-quad chars after padding check).
+                  txt=b''.join(parts[i] for i in seq)
+                  try:
+                      packed=base64.b64decode(txt,validate=True)
+                      full=lzma.decompress(packed)
+                  except Exception:
+                      return
+                  doc=parse_glb(full)
+                  if doc:
+                      digest=hashlib.sha256(full).hexdigest()
+                      if digest not in seen:
+                          seen[digest]={
+                            'indices':seq[:],
+                            'blob_shas':[shas[i] for i in seq],
+                            'glb_bytes':len(full),
+                            'xz_bytes':len(packed),
+                            'sha256':digest,
+                            'meshes':len(doc.get('meshes',[]) or []),
+                            'nodes':len(doc.get('nodes',[]) or []),
+                            'materials':len(doc.get('materials',[]) or []),
+                          }
+                          (root/'valid'/f'{digest[:12]}.glb').write_bytes(full)
+                  return
+              if depth>=7:return
+              for nxt in list(remaining):
+                  # base64 continuations only; another XZ header means another model, not this stream
+                  nr=[x for x in remaining if x!=nxt]
+                  walk(seq+[nxt],nr,depth+1)
 
-          report={'attempts':attempts,'start_indices':starts,'valid_count':len(seen),'valid':list(seen.values())}
-          Path('cat-recovery-report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n')
-          print(json.dumps(report,indent=2,ensure_ascii=False))
+          for st in starts:
+              walk([st],continuations[:],0)
+
+          report={'starts':starts,'continuations':continuations,'tested':tested,'prefix_ok':prefix_ok,'valid_count':len(seen),'valid':list(seen.values())}
+          Path('cat-permutation-report.json').write_text(json.dumps(report,indent=2)+'\n')
+          print(json.dumps(report,indent=2))
           PY
 
           rm -rf assets/cats/recovered-upload
           mkdir -p assets/cats/recovered-upload
-          cp /tmp/catrecover/valid/*.glb assets/cats/recovered-upload/ 2>/dev/null || true
+          cp /tmp/catperm/valid/*.glb assets/cats/recovered-upload/ 2>/dev/null || true
 
-      - name: Commit recovered models and report
+      - name: Commit permutation recovery
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add cat-recovery-report.json assets/cats/recovered-upload
-          git commit -m 'Recover valid uploaded cat GLBs' || exit 0
+          git add cat-permutation-report.json assets/cats/recovered-upload
+          git commit -m 'Recover scrambled uploaded cat GLBs' || exit 0
           git push
 
-# recovery-trigger-2
+# permutation-trigger-1
