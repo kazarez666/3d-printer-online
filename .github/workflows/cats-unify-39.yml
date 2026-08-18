@@ -1,0 +1,170 @@
+name: Unify cat meshes 3.9 once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cats-unify-39.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  unify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fuse cat body parts into single meshes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet numpy scipy scikit-image trimesh fast-simplification
+          python - <<'PY'
+          from pathlib import Path
+          import numpy as np
+          import trimesh
+          from scipy import ndimage
+
+          CAT_FILES = [
+              'BritishShorthair.obj',
+              'SiameseCat.obj',
+              'OrangeTabby.obj',
+              'MaineCoon.obj',
+              'BengalCat.obj',
+          ]
+
+          def parse_obj(path):
+              verts=[]
+              objects=[]
+              current={'name':'cat_body','faces':[]}
+              objects.append(current)
+              for raw in path.read_text().splitlines():
+                  line=raw.strip()
+                  if not line or line.startswith('#'):
+                      continue
+                  if line.startswith('v '):
+                      q=line.split(); verts.append(tuple(map(float,q[1:4])))
+                  elif line.startswith('o '):
+                      name=line[2:].strip() or 'part'
+                      current={'name':name,'faces':[]}; objects.append(current)
+                  elif line.startswith('f '):
+                      face=[]
+                      for tok in line.split()[1:]:
+                          idx=int(tok.split('/')[0])
+                          if idx<0: idx=len(verts)+idx+1
+                          face.append(idx-1)
+                      if len(face)==3:
+                          current['faces'].append(tuple(face))
+                      elif len(face)>3:
+                          for i in range(1,len(face)-1): current['faces'].append((face[0],face[i],face[i+1]))
+              return np.asarray(verts,dtype=float), objects
+
+          def fuse(path):
+              verts, objects = parse_obj(path)
+              structural=[]
+              details=[]
+              for obj in objects:
+                  n=obj['name'].lower()
+                  if not obj['faces']: continue
+                  if n.startswith('mark_') or n.startswith('detail_'):
+                      details.append(obj)
+                  else:
+                      structural.extend(obj['faces'])
+              if not structural:
+                  raise RuntimeError(f'No structural geometry in {path}')
+              mesh=trimesh.Trimesh(vertices=verts,faces=np.asarray(structural),process=True,validate=True)
+              mesh.remove_unreferenced_vertices()
+              ext=mesh.extents
+              pitch=max(ext)/82.0
+              vox=mesh.voxelized(pitch).fill()
+              mat=vox.matrix.astype(bool)
+              # Close seams between intersecting authored pieces, then lightly smooth jagged joins.
+              structure=ndimage.generate_binary_structure(3,2)
+              mat=ndimage.binary_closing(mat,structure=structure,iterations=2)
+              mat=ndimage.binary_fill_holes(mat)
+              fused=trimesh.voxel.ops.matrix_to_marching_cubes(mat,pitch=pitch)
+              fused.apply_translation(vox.origin)
+              fused.remove_duplicate_faces()
+              fused.remove_degenerate_faces()
+              fused.remove_unreferenced_vertices()
+              trimesh.repair.fix_normals(fused,multibody=True)
+              target_faces={
+                  'BritishShorthair.obj':1500,
+                  'SiameseCat.obj':1350,
+                  'OrangeTabby.obj':1450,
+                  'MaineCoon.obj':1750,
+                  'BengalCat.obj':1450,
+              }[path.name]
+              if len(fused.faces)>target_faces:
+                  fused=fused.simplify_quadric_decimation(face_count=target_faces)
+              fused.remove_unreferenced_vertices()
+              trimesh.repair.fix_normals(fused,multibody=True)
+
+              out=['# 3D Printer Online unified low-poly cat mesh 3.9','o cat_body','g cat_body']
+              for x,y,z in fused.vertices:
+                  out.append(f'v {x:.6f} {y:.6f} {z:.6f}')
+              for a,b,c in fused.faces:
+                  out.append(f'f {a+1} {b+1} {c+1}')
+              offset=len(fused.vertices)
+
+              # Preserve only surface coloring/details. Limbs/head/tail are now all one body mesh.
+              for obj in details:
+                  used=[]; seen=set()
+                  for f in obj['faces']:
+                      for idx in f:
+                          if idx not in seen:
+                              seen.add(idx); used.append(idx)
+                  remap={old:i for i,old in enumerate(used)}
+                  out.append('o '+obj['name']); out.append('g '+obj['name'])
+                  for old in used:
+                      x,y,z=verts[old]
+                      out.append(f'v {x:.6f} {y:.6f} {z:.6f}')
+                  for f in obj['faces']:
+                      a,b,c=[offset+remap[i]+1 for i in f]
+                      out.append(f'f {a} {b} {c}')
+                  offset+=len(used)
+
+              path.write_text('\n'.join(out)+'\n')
+              check=trimesh.load(path,force='scene',process=False)
+              body_count=1
+              print(path.name,'body_faces=',len(fused.faces),'details=',len(details),'pitch=',pitch,'saved')
+
+          root=Path('assets/cats')
+          for name in CAT_FILES:
+              fuse(root/name)
+          PY
+
+      - name: Bump app to 3.9
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          app=Path('app.js')
+          s=app.read_text()
+          if "const APP_VERSION='3.8';" not in s:
+              raise SystemExit('Expected APP_VERSION 3.8')
+          s=s.replace("const APP_VERSION='3.8';","const APP_VERSION='3.9';",1)
+          app.write_text(s)
+
+          html=Path('app.html')
+          h=html.read_text()
+          if '3.8' not in h:
+              raise SystemExit('Expected app.html 3.8')
+          h=h.replace('3.8','3.9').replace('ANGULAR CAT MESH BUILD 3.9','UNIFIED CAT MESH BUILD 3.9').replace('AUTHORED CAT MESH BUILD 3.9','UNIFIED CAT MESH BUILD 3.9')
+          html.write_text(h)
+          Path('version.json').write_text('{"version":"3.9"}\n')
+          PY
+          node --check app.js
+
+      - name: Commit unified cats 3.9
+        shell: bash
+        run: |
+          rm .github/workflows/cats-unify-39.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/cats app.js app.html version.json .github/workflows/cats-unify-39.yml
+          git commit -m 'Cats 3.9 unify body legs head and tail'
+          git push
