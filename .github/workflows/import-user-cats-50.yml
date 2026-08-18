@@ -1,4 +1,4 @@
-name: Reconstruct user cat blobs 5.0
+name: Recover user cat GLBs 5.0
 
 on:
   push:
@@ -10,18 +10,18 @@ permissions:
   contents: write
 
 jobs:
-  reconstruct:
+  recover:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Find valid contiguous base64 XZ GLB groups
+      - name: Recover every valid GLB from uploaded blob chunks
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/catrecon
-          mkdir -p /tmp/catrecon
+          rm -rf /tmp/catrecover
+          mkdir -p /tmp/catrecover/valid
           CANDIDATES=(
             b21e9405e8935998a67ccb745e64abdecfb11096
             cb1e04bbb87344aab90d77ba9de9c4f773e06ebb
@@ -40,61 +40,50 @@ jobs:
             fcbcbdb11cafdc9b02912cecd7e04cb0b12a1ac6
             b6525d7347ea64babe84ffef52a5dd0518b42784
           )
-          : > /tmp/catrecon/list.txt
+          : > /tmp/catrecover/list.txt
           for sha in "${CANDIDATES[@]}"; do
             curl -fsSL \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/$sha" \
-              | jq -r '.content' | tr -d '\n' | base64 -d > "/tmp/catrecon/$sha.txt"
-            echo "$sha" >> /tmp/catrecon/list.txt
+              | jq -r '.content' | tr -d '\n' | base64 -d > "/tmp/catrecover/$sha.txt"
+            echo "$sha" >> /tmp/catrecover/list.txt
           done
 
           python - <<'PY'
           from pathlib import Path
-          import base64, lzma, itertools
+          import base64, lzma, itertools, hashlib, json, struct
 
-          root=Path('/tmp/catrecon')
+          root=Path('/tmp/catrecover')
           shas=root.joinpath('list.txt').read_text().splitlines()
           parts=[root.joinpath(s+'.txt').read_bytes() for s in shas]
-          targets={506016:'siamese',754420:'maine_coon',582060:'russian_blue',557136:'bengal',452116:'sphynx'}
-          lines=[]
-          found={}
+          starts=[i for i,p in enumerate(parts) if p.startswith(b'/Td6WFo')]
+          seen={}
+          attempts=0
 
-          for i in range(len(parts)):
-              acc=b''
-              for j in range(i,len(parts)):
-                  acc += parts[j]
-                  compact=b''.join(acc.split())
-                  try:
-                      packed=base64.b64decode(compact,validate=True)
-                  except Exception:
-                      continue
-                  if not packed.startswith(b'\xfd7zXZ\x00'):
-                      continue
-                  try:
-                      raw=lzma.decompress(packed)
-                  except Exception:
-                      continue
-                  magic=raw[:12].hex()
-                  lines.append(f'{i}-{j} chars={len(compact)} packed={len(packed)} out={len(raw)} magic={magic}')
-                  if raw[:4]==b'glTF' and len(raw) in targets:
-                      breed=targets[len(raw)]
-                      out=root/(breed+'.glb')
-                      out.write_bytes(raw)
-                      found[breed]=(i,j,len(raw),shas[i],shas[j])
+          def parse_glb(raw):
+              if len(raw)<20 or raw[:4]!=b'glTF': return None
+              magic,version,total=struct.unpack_from('<4sII',raw,0)
+              if version!=2 or total!=len(raw): return None
+              clen,ctype=struct.unpack_from('<II',raw,12)
+              if ctype!=0x4E4F534A or 20+clen>len(raw): return None
+              try:
+                  doc=json.loads(raw[20:20+clen].decode('utf-8').rstrip(' \t\r\n\0'))
+              except Exception:
+                  return None
+              return doc
 
-          # Also try every ordered subsequence that starts with an XZ base64 header.
-          # This handles chunks that were interleaved by earlier parallel upload calls.
-          start_indices=[i for i,p in enumerate(parts) if p.startswith(b'/Td6WFo')]
-          for i in start_indices:
-              rest=[k for k in range(i+1,len(parts))]
-              for r in range(1,min(5,len(rest))+1):
-                  for combo_tail in itertools.combinations(rest,r):
-                      idx=(i,)+combo_tail
+          for start in starts:
+              later=list(range(start+1,len(parts)))
+              # Up to 7 continuation chunks.  All earlier uploads were split into small pieces,
+              # and this covers interleaved upload order while keeping runtime bounded.
+              for tails_n in range(0,min(7,len(later))+1):
+                  for tail in itertools.combinations(later,tails_n):
+                      idx=(start,)+tail
                       compact=b''.join(b''.join(parts[k].split()) for k in idx)
-                      if len(compact)%4==1:
+                      if len(compact)>180000 or len(compact)%4==1:
                           continue
+                      attempts+=1
                       try:
                           packed=base64.b64decode(compact,validate=True)
                           if not packed.startswith(b'\xfd7zXZ\x00'):
@@ -102,32 +91,51 @@ jobs:
                           raw=lzma.decompress(packed)
                       except Exception:
                           continue
-                      if raw[:4]==b'glTF' and len(raw) in targets:
-                          breed=targets[len(raw)]
-                          if breed not in found:
-                              (root/(breed+'.glb')).write_bytes(raw)
-                              found[breed]=(idx,len(raw))
-                              lines.append(f'combo={idx} out={len(raw)} breed={breed}')
+                      doc=parse_glb(raw)
+                      if doc is None:
+                          continue
+                      digest=hashlib.sha256(raw).hexdigest()
+                      if digest in seen:
+                          continue
+                      names=[]
+                      for key in ('scenes','nodes','meshes','materials'):
+                          for item in doc.get(key,[]) or []:
+                              n=item.get('name') if isinstance(item,dict) else None
+                              if n: names.append(f'{key}:{n}')
+                      asset=doc.get('asset',{})
+                      summary={
+                          'indices':idx,
+                          'blob_shas':[shas[k] for k in idx],
+                          'base64_chars':len(compact),
+                          'xz_bytes':len(packed),
+                          'glb_bytes':len(raw),
+                          'sha256':digest,
+                          'asset':asset,
+                          'names':names[:40],
+                          'scene':doc.get('scene'),
+                          'mesh_count':len(doc.get('meshes',[]) or []),
+                          'node_count':len(doc.get('nodes',[]) or []),
+                          'material_count':len(doc.get('materials',[]) or []),
+                      }
+                      seen[digest]=summary
+                      (root/'valid'/f'{digest[:12]}.glb').write_bytes(raw)
 
-          diag=['VALID RECONSTRUCTIONS:']+lines+['','FOUND:']+[f'{k}: {v}' for k,v in sorted(found.items())]
-          Path('cat-combo-diag.txt').write_text('\n'.join(diag)+'\n')
-          print('\n'.join(diag))
+          report={'attempts':attempts,'start_indices':starts,'valid_count':len(seen),'valid':list(seen.values())}
+          Path('cat-recovery-report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n')
+          print(json.dumps(report,indent=2,ensure_ascii=False))
           PY
 
-          mkdir -p assets/cats/user-pack
-          for breed in siamese maine_coon russian_blue bengal sphynx; do
-            if [ -f "/tmp/catrecon/$breed.glb" ]; then
-              cp "/tmp/catrecon/$breed.glb" "assets/cats/user-pack/printed_cat_$breed.glb"
-            fi
-          done
+          rm -rf assets/cats/recovered-upload
+          mkdir -p assets/cats/recovered-upload
+          cp /tmp/catrecover/valid/*.glb assets/cats/recovered-upload/ 2>/dev/null || true
 
-      - name: Commit reconstruction results
+      - name: Commit recovered models and report
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add cat-combo-diag.txt assets/cats/user-pack 2>/dev/null || true
-          git commit -m 'Reconstruct uploaded cat GLB blobs' || exit 0
+          git add cat-recovery-report.json assets/cats/recovered-upload
+          git commit -m 'Recover valid uploaded cat GLBs' || exit 0
           git push
 
-# reconstruction-trigger-1
+# recovery-trigger-2
