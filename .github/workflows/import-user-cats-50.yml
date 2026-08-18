@@ -1,4 +1,4 @@
-name: Diagnose user cat blobs 5.0
+name: Reconstruct user cat blobs 5.0
 
 on:
   push:
@@ -10,18 +10,18 @@ permissions:
   contents: write
 
 jobs:
-  diagnose:
+  reconstruct:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect orphan blobs
+      - name: Find valid contiguous base64 XZ GLB groups
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set +e
-          rm -f cat-import-diag.txt
-          touch cat-import-diag.txt
+          set -euo pipefail
+          rm -rf /tmp/catrecon
+          mkdir -p /tmp/catrecon
           CANDIDATES=(
             b21e9405e8935998a67ccb745e64abdecfb11096
             cb1e04bbb87344aab90d77ba9de9c4f773e06ebb
@@ -40,38 +40,94 @@ jobs:
             fcbcbdb11cafdc9b02912cecd7e04cb0b12a1ac6
             b6525d7347ea64babe84ffef52a5dd0518b42784
           )
-          mkdir -p /tmp/catdiag
+          : > /tmp/catrecon/list.txt
           for sha in "${CANDIDATES[@]}"; do
-            json=/tmp/catdiag/$sha.json
-            raw=/tmp/catdiag/$sha.raw
-            out=/tmp/catdiag/$sha.out
-            code=$(curl -sS -o "$json" -w '%{http_code}' \
+            curl -fsSL \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/$sha")
-            if [ "$code" != 200 ]; then
-              echo "$sha HTTP=$code" >> cat-import-diag.txt
-              continue
-            fi
-            jq -r '.content' "$json" | tr -d '\n' | base64 -d > "$raw"
-            rawsize=$(stat -c%s "$raw" 2>/dev/null || echo 0)
-            rawmagic=$(xxd -p -l 8 "$raw" 2>/dev/null || true)
-            cp "$raw" "$out"
-            if [ "$(xxd -p -l 6 "$raw")" = "fd377a585a00" ]; then
-              xz -dc "$raw" > "$out" 2>/dev/null
-            fi
-            outsize=$(stat -c%s "$out" 2>/dev/null || echo 0)
-            outmagic=$(xxd -p -l 12 "$out" 2>/dev/null || true)
-            echo "$sha raw=$rawsize rawmagic=$rawmagic out=$outsize outmagic=$outmagic" >> cat-import-diag.txt
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/$sha" \
+              | jq -r '.content' | tr -d '\n' | base64 -d > "/tmp/catrecon/$sha.txt"
+            echo "$sha" >> /tmp/catrecon/list.txt
           done
-          cat cat-import-diag.txt
-      - name: Commit diagnostics
+
+          python - <<'PY'
+          from pathlib import Path
+          import base64, lzma, itertools
+
+          root=Path('/tmp/catrecon')
+          shas=root.joinpath('list.txt').read_text().splitlines()
+          parts=[root.joinpath(s+'.txt').read_bytes() for s in shas]
+          targets={506016:'siamese',754420:'maine_coon',582060:'russian_blue',557136:'bengal',452116:'sphynx'}
+          lines=[]
+          found={}
+
+          for i in range(len(parts)):
+              acc=b''
+              for j in range(i,len(parts)):
+                  acc += parts[j]
+                  compact=b''.join(acc.split())
+                  try:
+                      packed=base64.b64decode(compact,validate=True)
+                  except Exception:
+                      continue
+                  if not packed.startswith(b'\xfd7zXZ\x00'):
+                      continue
+                  try:
+                      raw=lzma.decompress(packed)
+                  except Exception:
+                      continue
+                  magic=raw[:12].hex()
+                  lines.append(f'{i}-{j} chars={len(compact)} packed={len(packed)} out={len(raw)} magic={magic}')
+                  if raw[:4]==b'glTF' and len(raw) in targets:
+                      breed=targets[len(raw)]
+                      out=root/(breed+'.glb')
+                      out.write_bytes(raw)
+                      found[breed]=(i,j,len(raw),shas[i],shas[j])
+
+          # Also try every ordered subsequence that starts with an XZ base64 header.
+          # This handles chunks that were interleaved by earlier parallel upload calls.
+          start_indices=[i for i,p in enumerate(parts) if p.startswith(b'/Td6WFo')]
+          for i in start_indices:
+              rest=[k for k in range(i+1,len(parts))]
+              for r in range(1,min(5,len(rest))+1):
+                  for combo_tail in itertools.combinations(rest,r):
+                      idx=(i,)+combo_tail
+                      compact=b''.join(b''.join(parts[k].split()) for k in idx)
+                      if len(compact)%4==1:
+                          continue
+                      try:
+                          packed=base64.b64decode(compact,validate=True)
+                          if not packed.startswith(b'\xfd7zXZ\x00'):
+                              continue
+                          raw=lzma.decompress(packed)
+                      except Exception:
+                          continue
+                      if raw[:4]==b'glTF' and len(raw) in targets:
+                          breed=targets[len(raw)]
+                          if breed not in found:
+                              (root/(breed+'.glb')).write_bytes(raw)
+                              found[breed]=(idx,len(raw))
+                              lines.append(f'combo={idx} out={len(raw)} breed={breed}')
+
+          diag=['VALID RECONSTRUCTIONS:']+lines+['','FOUND:']+[f'{k}: {v}' for k,v in sorted(found.items())]
+          Path('cat-combo-diag.txt').write_text('\n'.join(diag)+'\n')
+          print('\n'.join(diag))
+          PY
+
+          mkdir -p assets/cats/user-pack
+          for breed in siamese maine_coon russian_blue bengal sphynx; do
+            if [ -f "/tmp/catrecon/$breed.glb" ]; then
+              cp "/tmp/catrecon/$breed.glb" "assets/cats/user-pack/printed_cat_$breed.glb"
+            fi
+          done
+
+      - name: Commit reconstruction results
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add cat-import-diag.txt
-          git commit -m 'Diagnose uploaded cat model blobs' || exit 0
+          git add cat-combo-diag.txt assets/cats/user-pack 2>/dev/null || true
+          git commit -m 'Reconstruct uploaded cat GLB blobs' || exit 0
           git push
 
-# diagnostic-trigger-1
+# reconstruction-trigger-1
