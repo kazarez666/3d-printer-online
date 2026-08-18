@@ -1,0 +1,156 @@
+name: Import user cat pack 5.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/import-user-cats-50.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  import-cats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Recover uploaded GLB blobs and install cat pack
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/cats/user-pack /tmp/catblobs
+
+          CANDIDATES=(
+            b21e9405e8935998a67ccb745e64abdecfb11096
+            cb1e04bbb87344aab90d77ba9de9c4f773e06ebb
+            ea0f5cc84d6af7bed8403fc0895ec3c0cd06ebfd
+            795d0b5cbdd76017296afa17e6e75667d74a8b63
+            e2c2f930dac06d33b4066da79d3a9777f08d6ed2
+            a6d4f96b7c09fcfee00b0d9ead6cef984ed1f68f
+            90fc200197d6821c872698ff674b048eeae347b6
+            b3c3b985ca85475ae9e247b4ef87957b815e68cf
+            e4740591351eb7a3c982955080a792ef4d9aae92
+            3066a48dc55e4d953323f9b599690e3365d18fe4
+            56429f985be01a3ea2fa7e218188ff64efd2eba7
+            8f77d674da6b929297bb06d69fc3ec9c8bea1f77
+            a0fb7955d403a6672cc45c382f99d93dda90a434
+            cfe5b3916f96436de0126564709f33bde2850fe9
+            fcbcbdb11cafdc9b02912cecd7e04cb0b12a1ac6
+            b6525d7347ea64babe84ffef52a5dd0518b42784
+          )
+
+          found=0
+          for sha in "${CANDIDATES[@]}"; do
+            echo "Inspecting $sha"
+            json="/tmp/catblobs/$sha.json"
+            raw="/tmp/catblobs/$sha.raw"
+            out="/tmp/catblobs/$sha.out"
+            curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/$sha" > "$json" || continue
+            jq -r '.content' "$json" | tr -d '\n' | base64 -d > "$raw" || continue
+
+            if head -c 6 "$raw" | grep -q $'\xFD7zXZ'; then
+              xz -dc "$raw" > "$out" || continue
+            else
+              cp "$raw" "$out"
+            fi
+
+            size=$(stat -c%s "$out")
+            magic=$(head -c 4 "$out" || true)
+            [[ "$magic" == "glTF" ]] || continue
+
+            case "$size" in
+              506016) dest='assets/cats/user-pack/printed_cat_siamese.glb' ;;
+              754420) dest='assets/cats/user-pack/printed_cat_maine_coon.glb' ;;
+              582060) dest='assets/cats/user-pack/printed_cat_russian_blue.glb' ;;
+              557136) dest='assets/cats/user-pack/printed_cat_bengal.glb' ;;
+              452116) dest='assets/cats/user-pack/printed_cat_sphynx.glb' ;;
+              *) echo "GLB with unexpected size $size from $sha; ignoring"; continue ;;
+            esac
+
+            if [[ ! -f "$dest" ]]; then
+              cp "$out" "$dest"
+              echo "Recovered $dest ($size bytes)"
+              found=$((found+1))
+            fi
+          done
+
+          echo "Recovered $found model(s)"
+          [[ -f assets/cats/user-pack/printed_cat_siamese.glb ]]
+          [[ -f assets/cats/user-pack/printed_cat_maine_coon.glb ]]
+          [[ -f assets/cats/user-pack/printed_cat_russian_blue.glb ]]
+          [[ -f assets/cats/user-pack/printed_cat_bengal.glb ]]
+          [[ -f assets/cats/user-pack/printed_cat_sphynx.glb ]]
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('app.js')
+          s=p.read_text()
+          s=s.replace("const APP_VERSION='4.1';", "const APP_VERSION='5.0';", 1)
+          s=s.replace("selected:{cats:'british',dinos:'para',ducks:'yellow'}", "selected:{cats:'siamese',dinos:'para',ducks:'yellow'}")
+          s=s.replace("selected={cats:'british',dinos:'para',ducks:'yellow'}", "selected={cats:'siamese',dinos:'para',ducks:'yellow'}")
+
+          start=s.index(" cats:{label:'CATS',single:'CAT',range:'$10–$50',variants:[")
+          end=s.index(" dinos:{label:'DINOSAURS'", start)
+          cats=""" cats:{label:'CATS',single:'CAT',range:'$10–$50',variants:[
+  {id:'siamese',name:'Siamese Cat',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/cats/user-pack/printed_cat_siamese.glb',tint:0xffffff,target:1.62,max:2.25},
+  {id:'russian',name:'Russian Blue',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/cats/user-pack/printed_cat_russian_blue.glb',tint:0xffffff,target:1.58,max:2.25},
+  {id:'sphynx',name:'Sphynx',rarity:'Common',value:10,weight:55,type:'gltf',src:'assets/cats/user-pack/printed_cat_sphynx.glb',tint:0xffffff,target:1.60,max:2.25},
+  {id:'maine',name:'Maine Coon',rarity:'Rare',value:25,weight:18,type:'gltf',src:'assets/cats/user-pack/printed_cat_maine_coon.glb',tint:0xffffff,target:1.69,max:2.30},
+  {id:'bengal',name:'Bengal Cat',rarity:'Legendary',value:50,weight:7,type:'gltf',src:'assets/cats/user-pack/printed_cat_bengal.glb',tint:0xffffff,target:1.65,max:2.30}
+ ]},
+"""
+          s=s[:start]+cats+s[end:]
+          p.write_text(s)
+
+          h=Path('app.html').read_text()
+          h=re.sub(r'Test Build [^<]+', 'Test Build 5.0', h)
+          h=re.sub(r'<span>[^<]*BUILD[^<]*</span>', '<span>USER CAT PACK • 5.0</span>', h)
+          h=h.replace('PRINT BRITISH SHORTHAIR','PRINT SIAMESE CAT')
+          h=re.sub(r'\?v=4\.[0-9][^"\']*', '?v=5.0', h)
+          h=re.sub(r'\n\s*<script src="cat-polish-safe\.js[^>]*></script>', '', h)
+          Path('app.html').write_text(h)
+          Path('version.json').write_text('{"version":"5.0"}\n')
+          PY
+
+          rm -f cat-polish-safe.js
+
+      - name: Validate build and models
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check app.js
+          grep -q "APP_VERSION='5.0'" app.js
+          grep -q 'printed_cat_siamese.glb' app.js
+          grep -q 'printed_cat_russian_blue.glb' app.js
+          grep -q 'printed_cat_sphynx.glb' app.js
+          grep -q 'printed_cat_maine_coon.glb' app.js
+          grep -q 'printed_cat_bengal.glb' app.js
+          grep -q '"version":"5.0"' version.json
+          ! grep -q 'cat-polish-safe.js' app.html
+          test $(stat -c%s assets/cats/user-pack/printed_cat_siamese.glb) -eq 506016
+          test $(stat -c%s assets/cats/user-pack/printed_cat_maine_coon.glb) -eq 754420
+          test $(stat -c%s assets/cats/user-pack/printed_cat_russian_blue.glb) -eq 582060
+          test $(stat -c%s assets/cats/user-pack/printed_cat_bengal.glb) -eq 557136
+          test $(stat -c%s assets/cats/user-pack/printed_cat_sphynx.glb) -eq 452116
+          for f in assets/cats/user-pack/*.glb; do
+            test "$(head -c 4 "$f")" = 'glTF'
+          done
+
+      - name: Commit real user cat pack 5.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/import-user-cats-50.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.js app.html version.json assets/cats/user-pack cat-polish-safe.js .github/workflows/import-user-cats-50.yml
+          git commit -m 'Cats 5.0 import user-provided GLB pack'
+          git push
