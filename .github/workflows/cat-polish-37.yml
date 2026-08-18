@@ -1,0 +1,66 @@
+name: Cat polish 3.7 once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cat-polish-37.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Polish cat proportions and colors
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path('app.js')
+          text = app.read_text()
+
+          replacements = {
+              "const APP_VERSION='3.6.1';": "const APP_VERSION='3.7';",
+              "{id:'british',name:'British Shorthair',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/BritishShorthair.obj',tint:0xaeb9c8,target:1.52,max:2.25,shape:[.94,1,.90]},": "{id:'british',name:'British Shorthair',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/BritishShorthair.obj',tint:0xb7c3d2,target:1.54,max:2.25,shape:[.88,1.02,.82]},",
+              "{id:'siamese',name:'Siamese Cat',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/SiameseCat.obj',tint:0xe7d3ad,target:1.58,max:2.25,shape:[.84,1.03,.84]},": "{id:'siamese',name:'Siamese Cat',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/SiameseCat.obj',tint:0xf0dfbf,target:1.62,max:2.25,shape:[.78,1.06,.74]},",
+              "{id:'tabby',name:'Orange Tabby',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/OrangeTabby.obj',tint:0xde8741,target:1.54,max:2.25,shape:[.90,1,.88]},": "{id:'tabby',name:'Orange Tabby',rarity:'Common',value:10,weight:55,type:'obj',src:'assets/cats/OrangeTabby.obj',tint:0xe08d48,target:1.57,max:2.25,shape:[.84,1.03,.78]},",
+              "{id:'maine',name:'Maine Coon',rarity:'Rare',value:25,weight:18,type:'obj',src:'assets/cats/MaineCoon.obj',tint:0x827870,target:1.64,max:2.30,shape:[.91,1.02,.89]},": "{id:'maine',name:'Maine Coon',rarity:'Rare',value:25,weight:18,type:'obj',src:'assets/cats/MaineCoon.obj',tint:0x8b7564,target:1.69,max:2.30,shape:[.86,1.05,.80]},",
+              "{id:'bengal',name:'Bengal Leopard Cat',rarity:'Legendary',value:50,weight:7,type:'obj',src:'assets/cats/BengalCat.obj',tint:0xd69a47,target:1.60,max:2.30,shape:[.82,1.04,.80]}": "{id:'bengal',name:'Bengal Leopard Cat',rarity:'Legendary',value:50,weight:7,type:'obj',src:'assets/cats/BengalCat.obj',tint:0xe0a24f,target:1.65,max:2.30,shape:[.76,1.08,.70]}"
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'Missing expected app.js fragment: {old[:90]}')
+              text = text.replace(old, new)
+
+          old_material = "if(v.type==='obj'){let col=v.tint;const n=(o.name||'').toLowerCase();if(n.includes('detail_eye'))col=0x15181d;else if(n.includes('detail_nose'))col=0x8f625c;else if(n.includes('mark_dark'))col=v.id==='siamese'?0x4c3d39:v.id==='bengal'?0x563927:0x66452f;else if(n.includes('mark_cream'))col=v.id==='siamese'?0xe9d8bb:0xead9bd;o.material=new THREE.MeshStandardMaterial({color:col,roughness:.58,metalness:.015,flatShading:true,transparent:false,opacity:1,alphaTest:0,depthWrite:true,depthTest:true,side:THREE.DoubleSide,clippingPlanes:[clip],clipShadows:true})}"
+          new_material = "if(v.type==='obj'){let col=v.tint;const n=(o.name||'').toLowerCase();if(n.includes('detail_eye'))col=v.id==='siamese'?0x31506e:0x17191f;else if(n.includes('detail_nose'))col=v.id==='bengal'?0x7d4b43:0x9a6761;else if(n.includes('mark_dark'))col=v.id==='siamese'?0x493832:v.id==='bengal'?0x4a2b18:v.id==='tabby'?0x8b4f2d:v.id==='maine'?0x5a4337:0x687486;else if(n.includes('mark_cream'))col=v.id==='bengal'?0xf2deb5:v.id==='siamese'?0xead8bb:v.id==='maine'?0xdcc5a4:0xe9dcc6;o.material=new THREE.MeshStandardMaterial({color:col,roughness:v.id==='bengal'?.52:.6,metalness:.01,flatShading:true,transparent:false,opacity:1,alphaTest:0,depthWrite:true,depthTest:true,side:THREE.DoubleSide,clippingPlanes:[clip],clipShadows:true})}"
+          if old_material not in text:
+              raise SystemExit('Missing OBJ material block')
+          text = text.replace(old_material, new_material)
+          app.write_text(text)
+
+          html = Path('app.html')
+          h = html.read_text()
+          if '3.6.1' not in h:
+              raise SystemExit('Expected app.html version 3.6.1')
+          h = h.replace('3.6.1', '3.7').replace('STABLE RUNTIME BUILD 3.7', 'CAT POLISH BUILD 3.7')
+          html.write_text(h)
+
+          Path('version.json').write_text('{"version":"3.7"}\n')
+          PY
+
+          node --check app.js
+
+      - name: Commit 3.7
+        shell: bash
+        run: |
+          rm .github/workflows/cat-polish-37.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.js app.html version.json .github/workflows/cat-polish-37.yml
+          git commit -m 'Cats 3.7 slimmer proportions and refined colors'
+          git push
