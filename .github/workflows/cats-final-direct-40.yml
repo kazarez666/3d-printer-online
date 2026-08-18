@@ -1,0 +1,221 @@
+name: Direct final cat polish 4.0 once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cats-final-direct-40.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build seamless-looking connected cats
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import math
+
+          OUT=Path('assets/cats'); OUT.mkdir(parents=True,exist_ok=True)
+
+          def norm(v):
+              n=math.sqrt(sum(q*q for q in v)) or 1.0
+              return tuple(q/n for q in v)
+          def sub(a,b): return tuple(a[i]-b[i] for i in range(3))
+          def add(a,b): return tuple(a[i]+b[i] for i in range(3))
+          def mul(a,s): return tuple(q*s for q in a)
+          def cross(a,b): return (a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0])
+
+          class Obj:
+              def __init__(self): self.v=[]; self.parts=[]
+              def part(self,name):
+                  p={'name':name,'faces':[]}; self.parts.append(p); return p
+              def verts(self,pts):
+                  out=[]
+                  for p in pts: self.v.append(p); out.append(len(self.v))
+                  return out
+              def tri(self,p,a,b,c): p['faces'].append((a,b,c))
+              def quad(self,p,a,b,c,d): self.tri(p,a,b,c); self.tri(p,a,c,d)
+              def loft_z(self,name,sections,sides=8):
+                  p=self.part(name); rings=[]
+                  for z,cy,rx,ry in sections:
+                      ring=[]
+                      for i in range(sides):
+                          a=2*math.pi*i/sides
+                          ring.append((rx*math.cos(a),cy+ry*math.sin(a),z))
+                      rings.append(self.verts(ring))
+                  for r in range(len(rings)-1):
+                      A,B=rings[r],rings[r+1]
+                      for i in range(sides): self.quad(p,A[i],A[(i+1)%sides],B[(i+1)%sides],B[i])
+                  c0=self.verts([(0,sections[0][1],sections[0][0])])[0]
+                  c1=self.verts([(0,sections[-1][1],sections[-1][0])])[0]
+                  for i in range(sides):
+                      self.tri(p,c0,rings[0][(i+1)%sides],rings[0][i])
+                      self.tri(p,c1,rings[-1][i],rings[-1][(i+1)%sides])
+              def tube(self,name,points,radii,sides=6):
+                  p=self.part(name); rings=[]
+                  for j,c in enumerate(points):
+                      if j==0: t=sub(points[1],points[0])
+                      elif j==len(points)-1: t=sub(points[-1],points[-2])
+                      else: t=sub(points[j+1],points[j-1])
+                      t=norm(t); ref=(0,1,0) if abs(t[1])<.88 else (1,0,0)
+                      n1=norm(cross(t,ref)); n2=norm(cross(t,n1)); r=radii[j]
+                      ring=[]
+                      for i in range(sides):
+                          a=2*math.pi*i/sides
+                          ring.append(add(c,add(mul(n1,math.cos(a)*r),mul(n2,math.sin(a)*r))))
+                      rings.append(self.verts(ring))
+                  for r in range(len(rings)-1):
+                      A,B=rings[r],rings[r+1]
+                      for i in range(sides): self.quad(p,A[i],A[(i+1)%sides],B[(i+1)%sides],B[i])
+                  c0=self.verts([points[0]])[0]; c1=self.verts([points[-1]])[0]
+                  for i in range(sides):
+                      self.tri(p,c0,rings[0][(i+1)%sides],rings[0][i])
+                      self.tri(p,c1,rings[-1][i],rings[-1][(i+1)%sides])
+              def ear(self,name,cx,z0,w,h,basey):
+                  # base is deliberately buried inside the head so the ear never reads as glued-on
+                  p=self.part(name)
+                  a,b,c,d,e=self.verts([(cx-w,basey,z0+.12),(cx+w,basey,z0+.12),(cx+w*.78,basey+.035,z0-.12),(cx-w*.78,basey+.035,z0-.12),(cx,basey+h,z0)])
+                  self.quad(p,a,b,c,d); self.tri(p,a,e,b); self.tri(p,b,e,c); self.tri(p,c,e,d); self.tri(p,d,e,a)
+              def plate_z(self,name,cx,cy,z,rx,ry,depth=.008,sides=6):
+                  p=self.part(name); F=[];B=[]
+                  for i in range(sides):
+                      a=2*math.pi*i/sides; x=cx+rx*math.cos(a); y=cy+ry*math.sin(a)
+                      F.append((x,y,z+depth)); B.append((x,y,z-depth))
+                  f=self.verts(F); b=self.verts(B)
+                  for i in range(1,sides-1): self.tri(p,f[0],f[i],f[i+1]); self.tri(p,b[0],b[i+1],b[i])
+                  for i in range(sides): self.quad(p,f[i],b[i],b[(i+1)%sides],f[(i+1)%sides])
+              def plate_x(self,name,x,cy,cz,ry,rz,depth=.008,sides=6):
+                  p=self.part(name); F=[];B=[]
+                  for i in range(sides):
+                      a=2*math.pi*i/sides; y=cy+ry*math.cos(a); z=cz+rz*math.sin(a)
+                      F.append((x+depth,y,z)); B.append((x-depth,y,z))
+                  f=self.verts(F); b=self.verts(B)
+                  for i in range(1,sides-1): self.tri(p,f[0],f[i],f[i+1]); self.tri(p,b[0],b[i+1],b[i])
+                  for i in range(sides): self.quad(p,f[i],b[i],b[(i+1)%sides],f[(i+1)%sides])
+              def text(self):
+                  lines=['# 3D Printer Online 4.0 final connected low-poly cat']
+                  for x,y,z in self.v: lines.append(f'v {x:.6f} {y:.6f} {z:.6f}')
+                  for p in self.parts:
+                      lines.append('o '+p['name']); lines.append('g '+p['name'])
+                      for f in p['faces']: lines.append('f '+' '.join(map(str,f)))
+                  return '\n'.join(lines)+'\n'
+
+          CFG={
+            'british':dict(W=.32,L=.72,H=.32,HW=.285,HH=.27,leg=.47,ear=.30,tail=.072),
+            'siamese':dict(W=.235,L=.80,H=.265,HW=.225,HH=.225,leg=.60,ear=.43,tail=.043),
+            'tabby':dict(W=.285,L=.76,H=.30,HW=.265,HH=.25,leg=.54,ear=.35,tail=.053),
+            'maine':dict(W=.315,L=.86,H=.325,HW=.295,HH=.275,leg=.57,ear=.42,tail=.082),
+            'bengal':dict(W=.245,L=.84,H=.275,HW=.225,HH=.225,leg=.60,ear=.36,tail=.047),
+          }
+
+          def build(fname,kind):
+              q=CFG[kind]; W,L,H,HW,HH=q['W'],q['L'],q['H'],q['HW'],q['HH']; by=.80
+              o=Obj()
+              # ONE continuous torso/neck/skull/muzzle loft. No separate head ball, no separate neck piece.
+              o.loft_z('cat_unified_body',[
+                (-L,by-.015,W*.73,H*.70),
+                (-L*.60,by,W,H),
+                (-L*.12,by+.025,W*.98,H*.98),
+                ( L*.38,by+.045,W*.88,H*.93),
+                ( L*.62,by+.10,W*.73,H*.78),
+                ( L*.73,1.00,HW*.74,HH*.68),
+                ( L*.82,1.13,HW*.88,HH*.84),
+                ( L*.93,1.22,HW,HH),
+                ( L+0.17,1.20,HW*.88,HH*.84),
+                ( L+0.36,1.12,HW*.53,HH*.46),
+              ],8)
+              # ears buried into skull
+              o.ear('ear_left',-HW*.54,L+.03,HW*.38,q['ear'],1.29)
+              o.ear('ear_right', HW*.54,L+.03,HW*.38,q['ear'],1.29)
+
+              # Each leg is ONE tube from a flared hip inside the torso through ankle to a flared toe.
+              # No separate paw geometry, so there is no visible paw seam.
+              front_z=L*.38; rear_z=-L*.43
+              for side in (-1,1):
+                  x=side*W*.53
+                  for z,tag,forward in ((front_z,'front',.08),(rear_z,'rear',-.045)):
+                      hip=(x,by+.01,z)
+                      upper=(x*1.02,.58,z+forward*.10)
+                      knee=(x*.99,.34,z+forward*.20)
+                      ankle=(x,.145,z+forward*.32)
+                      toe=(x,.078,z+forward)
+                      o.tube(f'leg_{tag}_{"L" if side<0 else "R"}',[hip,upper,knee,ankle,toe],[W*.24,W*.17,W*.125,W*.095,W*.125],6)
+
+              # tail starts well INSIDE the rump; the visible surface emerges without a detached joint
+              tr=q['tail']
+              if kind=='british':
+                  pts=[(-W*.16,by+.02,-L*.66),(-W*.42,by+.16,-L-.06),(-W*.48,by+.37,-L-.22),(-W*.28,by+.49,-L-.31)]
+              elif kind=='maine':
+                  pts=[(-W*.14,by+.02,-L*.66),(-W*.48,by+.19,-L-.10),(-W*.57,by+.43,-L-.30),(-W*.40,by+.65,-L-.43),(-.04,by+.75,-L-.40)]
+              else:
+                  pts=[(-W*.14,by+.02,-L*.66),(-W*.42,by+.16,-L-.10),(-W*.48,by+.38,-L-.28),(-W*.32,by+.56,-L-.43),(-.02,by+.64,-L-.42)]
+              o.tube('tail',pts,[tr*1.35,tr,tr*.84,tr*.68]+([tr*.52] if len(pts)==5 else []),6)
+
+              facez=L+.375
+              o.plate_z('detail_eye_left',-HW*.32,1.235,facez,HW*.095,HH*.065,.006,5)
+              o.plate_z('detail_eye_right', HW*.32,1.235,facez,HW*.095,HH*.065,.006,5)
+              o.plate_z('detail_nose',0,1.075,facez+.014,HW*.105,HH*.065,.006,4)
+
+              # markings are surface-thin only; they no longer create silhouette pieces
+              if kind=='siamese':
+                  o.plate_z('mark_dark_mask',0,1.16,facez-.006,HW*.57,HH*.44,.008,6)
+                  for side in (-1,1):
+                      x=side*(W*.54+.006)
+                      o.plate_x(f'mark_dark_front_paw_{side}',x,.13,front_z+.06,HH*.13,.09,.006,5)
+                      o.plate_x(f'mark_dark_rear_paw_{side}',x,.13,rear_z-.03,HH*.13,.09,.006,5)
+              elif kind=='tabby':
+                  for side in (-1,1):
+                      x=side*(W+.006)
+                      for j,(zv,yv,rz) in enumerate([(-.38,.82,.12),(-.13,.90,.11),(.11,.92,.10),(.33,.95,.08)]):
+                          o.plate_x(f'mark_dark_stripe_{side}_{j}',x,yv,zv,H*.18,rz,.006,4)
+                  o.plate_z('mark_dark_forehead',0,1.36,facez-.006,HW*.095,HH*.13,.006,4)
+              elif kind=='maine':
+                  o.plate_z('mark_cream_chest',0,.88,L*.70,HW*.54,H*.20,.007,6)
+                  for side in (-1,1): o.plate_x(f'mark_dark_flank_{side}',side*(W+.006),.91,-.05,H*.17,.15,.006,5)
+              elif kind=='british':
+                  o.plate_z('mark_cream_chest',0,.89,L*.69,HW*.42,H*.16,.006,6)
+              elif kind=='bengal':
+                  spots=[(-.50,.80,.11),(-.28,.92,.105),(-.04,.80,.095),(.20,.93,.10),(.42,.82,.09),(-.38,1.02,.085),(-.10,1.05,.095),(.17,1.03,.085),(.39,1.00,.078)]
+                  for side in (-1,1):
+                      x=side*(W+.007)
+                      for j,(zv,yv,r) in enumerate(spots):
+                          o.plate_x(f'mark_dark_spot_{side}_{j}',x,yv,zv,r*.68,r,.006,6)
+                          if j%2==0: o.plate_x(f'mark_warm_spot_{side}_{j}',side*(W+.015),yv,zv,r*.30,r*.44,.006,6)
+                  o.plate_z('mark_cream_chest',0,.89,L*.70,HW*.43,H*.15,.006,6)
+
+              (OUT/fname).write_text(o.text())
+
+          build('BritishShorthair.obj','british')
+          build('SiameseCat.obj','siamese')
+          build('OrangeTabby.obj','tabby')
+          build('MaineCoon.obj','maine')
+          build('BengalCat.obj','bengal')
+          Path('assets/cats/README.txt').write_text('4.0 final cat polish: continuous torso-neck-head-muzzle loft; legs run hip-to-toe as one tube; tail and ears buried into body/head; markings are surface-only.\n')
+
+          app=Path('app.js'); s=app.read_text()
+          if "const APP_VERSION='3.9';" not in s: raise SystemExit('Expected app.js 3.9')
+          app.write_text(s.replace("const APP_VERSION='3.9';","const APP_VERSION='4.0';",1))
+          html=Path('app.html'); h=html.read_text()
+          if '3.9' not in h: raise SystemExit('Expected app.html 3.9')
+          h=h.replace('3.9','4.0').replace('ANGULAR CAT BUILD 4.0','FINAL CAT POLISH 4.0')
+          html.write_text(h)
+          Path('version.json').write_text('{"version":"4.0"}\n')
+          PY
+          node --check app.js
+
+      - name: Commit final 4.0
+        shell: bash
+        run: |
+          rm -f .github/workflows/cats-final-40.yml .github/workflows/cats-final-direct-40.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/cats app.js app.html version.json .github/workflows/cats-final-40.yml .github/workflows/cats-final-direct-40.yml
+          git commit -m 'Cats 4.0 final connected silhouette polish'
+          git push
