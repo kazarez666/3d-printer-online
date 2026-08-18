@@ -1,0 +1,63 @@
+{
+  "starts": [
+    0,
+    2,
+    4,
+    5,
+    6,
+    9,
+    12,
+    13
+  ],
+  "continuations": [
+    1,
+    3,
+    7,
+    8,
+    10,
+    11,
+    14,
+    15
+  ],
+  "tested": 62,
+  "prefix_ok": 9,
+  "valid_count": 2,
+  "valid": [
+    {
+      "indices": [
+        6,
+        7,
+        8
+      ],
+      "blob_shas": [
+        "90fc200197d6821c872698ff674b048eeae347b6",
+        "b3c3b985ca85475ae9e247b4ef87957b815e68cf",
+        "e4740591351eb7a3c982955080a792ef4d9aae92"
+      ],
+      "glb_bytes": 50056,
+      "xz_bytes": 19560,
+      "sha256": "b1f4906d2193f0272a6ea64167562d5b92854a3f01fd4efec29507003bff277d",
+      "meshes": 1,
+      "nodes": 2,
+      "materials": 0
+    },
+    {
+      "indices": [
+        9,
+        10,
+        11
+      ],
+      "blob_shas": [
+        "3066a48dc55e4d953323f9b599690e3365d18fe4",
+        "56429f985be01a3ea2fa7e218188ff64efd2eba7",
+        "8f77d674da6b929297bb06d69fc3ec9c8bea1f77"
+      ],
+      "glb_bytes": 63728,
+      "xz_bytes": 23944,
+      "sha256": "a2888e46a93ff198564079ace67574182c65d69a1c0d4a686b48a83f5e7796e8",
+      "meshes": 1,
+      "nodes": 2,
+      "materials": 0
+    }
+  ]
+}
