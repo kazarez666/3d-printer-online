@@ -1,0 +1,189 @@
+name: Replace cats 3.8 once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/replace-cats-38.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download CC0 Quaternius cat and build breed variants
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/qcat && mkdir -p /tmp/qcat/src
+          curl -L --fail --retry 3 --retry-delay 2 \
+            'https://opengameart.org/sites/default/files/Animal%20Pack%20Vol.2%20by%20%40Quaternius.zip' \
+            -o /tmp/qcat/animals.zip
+          unzip -q /tmp/qcat/animals.zip -d /tmp/qcat/src
+          find /tmp/qcat/src -type f | sort | sed -n '1,160p'
+
+          python - <<'PY'
+          from pathlib import Path
+          import math, re
+
+          root=Path('/tmp/qcat/src')
+          candidates=[p for p in root.rglob('*.obj') if 'cat' in p.name.lower() or 'cat' in str(p.parent).lower()]
+          if not candidates:
+              raise SystemExit('No Cat OBJ found in Quaternius pack')
+          src=sorted(candidates, key=lambda p:(len(str(p)),str(p)))[0]
+          print('Using source cat:',src)
+          raw=src.read_text(errors='ignore').splitlines()
+          verts=[]
+          for line in raw:
+              if line.startswith('v '):
+                  q=line.split()
+                  verts.append((float(q[1]),float(q[2]),float(q[3])))
+          if not verts:
+              raise SystemExit('Cat OBJ has no vertices')
+          xs=[v[0] for v in verts];ys=[v[1] for v in verts];zs=[v[2] for v in verts]
+          mn=[min(xs),min(ys),min(zs)];mx=[max(xs),max(ys),max(zs)]
+          span=[mx[i]-mn[i] for i in range(3)];center=[(mn[i]+mx[i])/2 for i in range(3)]
+          # Blender OBJ export is normally Y-up. Determine horizontal length axis from X/Z spans.
+          length_axis=0 if span[0]>=span[2] else 2
+          width_axis=2 if length_axis==0 else 0
+          print('bbox',mn,mx,'span',span,'length_axis',length_axis,'width_axis',width_axis)
+
+          breeds={
+            'BritishShorthair.obj':dict(width=.94,length=.96,height=.99,head=1.04,upper=.98),
+            'SiameseCat.obj':dict(width=.76,length=1.07,height=1.08,head=.88,upper=.90),
+            'OrangeTabby.obj':dict(width=.86,length=1.03,height=1.04,head=.96,upper=.95),
+            'MaineCoon.obj':dict(width=.88,length=1.12,height=1.08,head=1.00,upper=.98),
+            'BengalCat.obj':dict(width=.74,length=1.14,height=1.10,head=.90,upper=.91),
+          }
+          outdir=Path('assets/cats');outdir.mkdir(parents=True,exist_ok=True)
+
+          def transform(v,p):
+              a=list(v)
+              # Centered global breed proportions.
+              a[width_axis]=center[width_axis]+(a[width_axis]-center[width_axis])*p['width']
+              a[length_axis]=center[length_axis]+(a[length_axis]-center[length_axis])*p['length']
+              a[1]=mn[1]+(a[1]-mn[1])*p['height']
+              yn=(v[1]-mn[1])/max(span[1],1e-9)
+              # Refine the upper/head region without generating new primitive geometry.
+              if yn>.72:
+                  t=min(1,(yn-.72)/.28)
+                  hs=1+(p['head']-1)*t
+                  a[width_axis]=center[width_axis]+(a[width_axis]-center[width_axis])*hs
+                  # slightly taper upper chest/neck for elegant silhouette
+                  us=1+(p['upper']-1)*(1-t)
+                  a[width_axis]=center[width_axis]+(a[width_axis]-center[width_axis])*us
+              # subtly lengthen legs on slender breeds by stretching lower quarter vertically
+              if yn<.28 and p['height']>1.03:
+                  low=(.28-yn)/.28
+                  a[1]-=span[1]*(p['height']-1)*.05*low
+              return a
+
+          for filename,p in breeds.items():
+              out=[];vi=0
+              out.append('# Quaternius CC0 cat mesh, breed-deformed for 3D Printer Online')
+              out.append('o cat_body')
+              for line in raw:
+                  if line.startswith('v '):
+                      a=transform(verts[vi],p);vi+=1
+                      out.append(f'v {a[0]:.7f} {a[1]:.7f} {a[2]:.7f}')
+                  elif line.startswith('mtllib '):
+                      continue
+                  elif line.startswith('usemtl '):
+                      continue
+                  elif line.startswith('o ') or line.startswith('g '):
+                      # preserve geometry but keep readable object names
+                      out.append('g cat_mesh')
+                  else:
+                      out.append(line)
+              (outdir/filename).write_text('\n'.join(out)+'\n')
+              print(filename,'written')
+
+          Path('assets/cats/QUATERNIUS_SOURCE.txt').write_text(
+              'Base cat mesh: Quaternius, Animated Animales Low Poly / Animal Pack Vol.2\n'
+              'Source: https://opengameart.org/content/animated-animales-low-poly\n'
+              'License: CC0 1.0 / public domain dedication\n'
+              'Breed variants in this project are geometry deformations of the authored base cat mesh.\n'
+          )
+          PY
+
+      - name: Update cat coloring and version
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app.js');s=p.read_text()
+          s=s.replace("const APP_VERSION='3.7';","const APP_VERSION='3.8';")
+          # New authored meshes already have breed proportions; only light final shaping here.
+          changes={
+            "shape:[.88,1.02,.82]":"shape:[.98,1.00,.96]",
+            "shape:[.78,1.06,.74]":"shape:[.97,1.01,.95]",
+            "shape:[.84,1.03,.78]":"shape:[.98,1.00,.96]",
+            "shape:[.86,1.05,.80]":"shape:[.98,1.00,.96]",
+            "shape:[.76,1.08,.70]":"shape:[.97,1.01,.95]",
+          }
+          for a,b in changes.items():
+              if a not in s: raise SystemExit('missing shape '+a)
+              s=s.replace(a,b,1)
+
+          # Re-enable breed markings, now only as accents on a real authored cat silhouette.
+          old="raw.updateMatrixWorld(true);modelHeight=new THREE.Box3().setFromObject(raw).getSize(new THREE.Vector3()).y;return raw}"
+          new="if(v.id==='british'||v.id==='siamese'||v.id==='tabby'||v.id==='maine'||v.id==='bengal')addBreedDetails(raw,{...v,breed:v.id});raw.updateMatrixWorld(true);modelHeight=new THREE.Box3().setFromObject(raw).getSize(new THREE.Vector3()).y;return raw}"
+          if old not in s: raise SystemExit('prepareModel tail not found')
+          s=s.replace(old,new,1)
+
+          # Tone breed details down: colors/patterns, not ball-based silhouette replacement.
+          start=s.index('function addBreedDetails(raw,v){')
+          end=s.index('function addDuckDetails(raw,v){',start)
+          func=r'''function addBreedDetails(raw,v){
+ const b=new THREE.Box3().setFromObject(raw),sz=b.getSize(new THREE.Vector3()),c=b.getCenter(new THREE.Vector3());
+ const front=b.max.z+sz.z*.008,back=b.min.z-sz.z*.008,headY=b.min.y+sz.y*.78,chestY=b.min.y+sz.y*.48;
+ const dark=detailMaterial(v.id==='siamese'?0x493832:v.id==='bengal'?0x4a2b18:v.id==='tabby'?0x95532f:v.id==='maine'?0x5b4438:0x718095,.58);
+ const cream=detailMaterial(v.id==='bengal'?0xf1dfb8:v.id==='siamese'?0xead8ba:v.id==='maine'?0xdcc5a4:0xdce3ea,.68);
+ const addSphere=(mat,x,y,z,sx,sy,szc)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.1,12,8),mat);m.position.set(x,y,z);m.scale.set(sx,sy,szc);m.castShadow=true;raw.add(m);return m};
+ const addBox=(mat,x,y,z,sx,sy,szc,rz=0)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(.1,.1,.1),mat);m.position.set(x,y,z);m.scale.set(sx,sy,szc);m.rotation.z=rz;m.castShadow=true;raw.add(m);return m};
+ if(v.id==='british'){
+   addSphere(cream,c.x,chestY,front,sz.x*1.0,sz.y*.34,sz.z*.12);
+ }
+ if(v.id==='siamese'){
+   addSphere(dark,c.x,headY,front,sz.x*1.65,sz.y*.72,sz.z*.18);
+   for(const x of [-.19,.19])addSphere(dark,c.x+sz.x*x,b.min.y+sz.y*.09,c.z+sz.z*.16,sz.x*.54,sz.y*.22,sz.z*.45);
+ }
+ if(v.id==='tabby'){
+   for(let i=-2;i<=2;i++){const x=c.x+sz.x*i*.095;addBox(dark,x,chestY+sz.y*(.11-abs(i)*.018),front,sz.x*.44,sz.y*.085,sz.z*.10,i*.09);addBox(dark,x,chestY+sz.y*(.11-abs(i)*.018),back,sz.x*.44,sz.y*.085,sz.z*.10,-i*.09)}
+   addBox(dark,c.x,headY+sz.y*.10,front,sz.x*.22,sz.y*.26,sz.z*.08,0);
+ }
+ if(v.id==='maine'){
+   addSphere(cream,c.x,chestY+sz.y*.04,front,sz.x*1.25,sz.y*.72,sz.z*.16);
+   addBox(dark,c.x-sz.x*.10,chestY+sz.y*.15,front,sz.x*.34,sz.y*.10,sz.z*.08,.16);
+   addBox(dark,c.x+sz.x*.10,chestY+sz.y*.12,front,sz.x*.34,sz.y*.10,sz.z*.08,-.16);
+ }
+ if(v.id==='bengal'){
+   const inner=detailMaterial(0xdcae69,.62);
+   const rosette=(px,py,side=1,sc=1)=>{const z=side>0?front:back;addSphere(dark,c.x+sz.x*px,b.min.y+sz.y*py,z,sz.x*.72*sc,sz.y*.24*sc,sz.z*.10);addSphere(inner,c.x+sz.x*px,b.min.y+sz.y*py,z+(side>0?sz.z*.008:-sz.z*.008),sz.x*.34*sc,sz.y*.11*sc,sz.z*.07)};
+   const pts=[[-.28,.48,1,1],[-.08,.52,1,.92],[.13,.50,1,.86],[.30,.58,1,.92],[-.22,.64,1,.82],[.02,.68,1,.96],[.24,.72,1,.78],[-.27,.80,1,.72],[-.05,.84,1,.72],[.18,.86,1,.66],[-.28,.48,-1,.9],[-.05,.54,-1,1],[.17,.53,-1,.84],[.30,.62,-1,.88],[-.18,.68,-1,.8],[.05,.73,-1,.9],[.23,.79,-1,.72],[-.08,.84,-1,.68]];
+   pts.forEach(q=>rosette(q[0],q[1],q[2],q[3]));
+   addSphere(cream,c.x,chestY+sz.y*.02,front,sz.x*.86,sz.y*.38,sz.z*.12);
+ }
+}
+'''.replace('abs(i)','Math.abs(i)')
+          s=s[:start]+func+s[end:]
+          p.write_text(s)
+
+          h=Path('app.html').read_text().replace('3.7','3.8').replace('CAT POLISH BUILD 3.8','AUTHORED CAT MESH BUILD 3.8')
+          Path('app.html').write_text(h)
+          Path('version.json').write_text('{"version":"3.8"}\n')
+          PY
+          node --check app.js
+
+      - name: Commit authored cats 3.8
+        shell: bash
+        run: |
+          rm .github/workflows/replace-cats-38.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/cats app.js app.html version.json .github/workflows/replace-cats-38.yml
+          git commit -m 'Cats 3.8 authored Quaternius mesh rebuild'
+          git push
