@@ -1,4 +1,4 @@
-const APP_VERSION='3.8';
+const APP_VERSION='3.9';
 (async()=>{try{const d=await fetch('version.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json());if(d.version&&d.version!==APP_VERSION){const u=new URL(location.href);u.searchParams.set('v',d.version);location.replace(u)}}catch{}})();
 const $=s=>document.querySelector(s);
 const ui={cash:$('#cash'),print:$('#printButton'),bar:$('#progressBar'),eyebrow:$('#statusEyebrow'),title:$('#statusTitle'),toast:$('#toast'),flash:$('#flash'),reset:$('#resetView'),tabs:$('#familyTabs'),name:$('#modelName'),meta:$('#modelMeta'),count:$('#packCount'),picker:$('#variantPicker')};
